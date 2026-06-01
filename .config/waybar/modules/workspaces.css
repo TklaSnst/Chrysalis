@@ -1,0 +1,31 @@
+#workspaces {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 2px 6px;
+}
+
+#workspaces button {
+    color: var(--fg-dim);
+    padding: 4px 8px;
+    margin: 2px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+
+/* активный workspace */
+#workspaces button.active {
+    background: var(--accent);
+    color: var(--bg);
+}
+
+/* занятый workspace */
+#workspaces button.occupied {
+    color: var(--fg);
+}
+
+/* hover */
+#workspaces button:hover {
+    background: var(--bg-window);
+    color: var(--fg);
+}

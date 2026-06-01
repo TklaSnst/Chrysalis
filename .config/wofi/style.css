@@ -1,0 +1,29 @@
+@import "/home/knm/.config/wofi/colors.css";
+window {
+    background: @bg;
+    border: 1px solid @border;
+    border-radius: 12px;
+    font-family: JetBrainsMono Nerd Font;
+    font-size: 13px;
+}
+
+#input {
+    margin: 10px;
+    padding: 8px;
+    border-radius: 8px;
+    background: @bg_window;
+    color: @fg;
+    border: none;
+}
+
+#entry {
+    padding: 8px;
+    margin: 2px 6px;
+    border-radius: 8px;
+    color: @fg_dim;
+}
+
+#entry:selected {
+    background: @accent;
+    color: @bg;
+}

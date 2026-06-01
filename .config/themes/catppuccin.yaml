@@ -1,0 +1,19 @@
+bg: "#1e1e2e"
+bg_panel: "#181825"
+bg_window: "#313244"
+bg_menu: "#45475a"
+
+fg: "#cdd6f4"
+fg_dim: "#bac2de"
+
+red: "#f38ba8"
+green: "#a6e3a1"
+yellow: "#f9e2af"
+blue: "#89b4fa"
+purple: "#cba6f7"
+cyan: "#94e2d5"
+orange: "#fab387"
+
+border: "#585b70"
+accent: "#f2cdcd"
+shadow: "rgba(0,0,0,0.3)"
