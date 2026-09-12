@@ -1,0 +1,129 @@
+#!/usr/bin/env python3
+"""Замер скорости через LibreSpeed (librespeed-cli) в цветах текущей темы.
+Запускается внутри alacritty из главного меню (см. speedtest-menu)."""
+import json
+import os
+import re
+import subprocess
+import sys
+import threading
+import time
+from pathlib import Path
+
+CFG = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+
+
+def theme():
+    """Цвета из сгенерированного hypr/theme.conf ($name = rgb(hex))."""
+    c = {}
+    try:
+        for line in (CFG / "hypr/theme.conf").read_text().splitlines():
+            m = re.match(r"\$(\w+)\s*=\s*rgb\(([0-9a-fA-F]{6})\)", line)
+            if m:
+                c[m.group(1)] = m.group(2)
+    except OSError:
+        pass
+    return c
+
+
+C = theme()
+
+
+def fg(name, default="c0caf5"):
+    h = C.get(name, default)
+    return f"\033[38;2;{int(h[0:2], 16)};{int(h[2:4], 16)};{int(h[4:6], 16)}m"
+
+
+RESET, BOLD, DIM = "\033[0m", "\033[1m", "\033[2m"
+ACC, ACC2, TXT, MUTE = fg("accent"), fg("accent2"), fg("fg"), fg("fg_dim", "565f89")
+GREEN, YEL, RED, CYAN = fg("green"), fg("yellow"), fg("red"), fg("cyan")
+
+FRAMES = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+
+
+def bar(value, vmax, width=28):
+    n = max(0, min(width, round(width * value / vmax))) if vmax else 0
+    return "█" * n + f"{MUTE}" + "░" * (width - n)
+
+
+def speed_color(mbps):
+    return GREEN if mbps >= 50 else YEL if mbps >= 10 else RED
+
+
+def ping_fallback(host="1.1.1.1"):
+    try:
+        out = subprocess.run(["ping", "-c", "4", "-i", "0.2", "-W", "2", host],
+                             capture_output=True, text=True, timeout=6).stdout
+        m = re.search(r"= ([\d.]+)/([\d.]+)/([\d.]+)/([\d.]+) ms", out)
+        if m:
+            return float(m.group(2)), float(m.group(4))
+    except Exception:
+        pass
+    return None, None
+
+
+def main():
+    print("\033[?25l", end="")  # спрятать курсор
+    print(f"\n  {ACC}{BOLD}󰓅  Speedtest{RESET}  {MUTE}LibreSpeed{RESET}\n")
+    result = {}
+    err = {}
+
+    def worker():
+        try:
+            r = subprocess.run(["librespeed-cli", "--json"], capture_output=True, text=True, timeout=180)
+            data = json.loads(r.stdout or "[]")
+            if not data:
+                raise RuntimeError(r.stderr.strip() or "пустой ответ")
+            result.update(data[0])
+        except Exception as e:
+            err["e"] = str(e)
+
+    t = threading.Thread(target=worker, daemon=True)
+    t.start()
+    p_avg, p_jit = ping_fallback()
+    i = 0
+    stages = ["выбираем сервер", "загрузка", "отдача"]
+    t0 = time.time()
+    while t.is_alive():
+        el = time.time() - t0
+        st = stages[0] if el < 4 else stages[1] if el < 20 else stages[2]
+        print(f"\r  {ACC2}{FRAMES[i % len(FRAMES)]}{RESET}  {TXT}измеряем… {MUTE}{st.ljust(18)}{RESET}", end="", flush=True)
+        i += 1
+        time.sleep(0.08)
+    print("\r" + " " * 60 + "\r", end="")
+
+    if err:
+        print(f"  {RED}{BOLD}✗ не удалось:{RESET} {err['e']}\n")
+    else:
+        dl, ul = float(result.get("download") or 0), float(result.get("upload") or 0)
+        srv = result.get("server", {}).get("name", "?")
+        ping, jit = float(result.get("ping") or 0), float(result.get("jitter") or 0)
+        if not ping:  # librespeed не смог — пингуем сам сервер теста
+            from urllib.parse import urlparse
+            host = urlparse(result.get("server", {}).get("url", "")).hostname
+            s_avg, s_jit = ping_fallback(host) if host else (None, None)
+            ping, jit = (s_avg or p_avg or 0), (s_jit or p_jit or 0)
+        vmax = max(100.0, dl, ul)
+        print(f"  {ACC}󰇚  Download{RESET}  {speed_color(dl)}{BOLD}{dl:7.2f}{RESET} {MUTE}Mbps{RESET}   {speed_color(dl)}{bar(dl, vmax)}{RESET}")
+        print(f"  {ACC}󰕒  Upload{RESET}    {speed_color(ul)}{BOLD}{ul:7.2f}{RESET} {MUTE}Mbps{RESET}   {speed_color(ul)}{bar(ul, vmax)}{RESET}")
+        print(f"  {ACC}󱦟  Ping{RESET}      {CYAN}{BOLD}{ping:7.1f}{RESET} {MUTE}ms{RESET}     {MUTE}jitter {jit:.1f} ms{RESET}")
+        print(f"\n  {MUTE}сервер: {srv}{RESET}")
+    print(f"\n  {MUTE}{DIM}любая клавиша — закрыть{RESET}", end="", flush=True)
+    print("\033[?25h", end="")
+    try:
+        import termios
+        import tty
+        fd = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        tty.setraw(fd)
+        sys.stdin.read(1)
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+    except Exception:
+        try:
+            input()
+        except EOFError:
+            pass
+
+
+if __name__ == "__main__":
+    main()

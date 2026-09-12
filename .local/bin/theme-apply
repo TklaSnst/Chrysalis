@@ -1,0 +1,512 @@
+#!/usr/bin/env python3
+"""Применяет цветовую тему ко всей системе.
+
+    theme-apply <id>        применить тему ~/.config/themes/<id>.json
+    theme-apply --list      список тем (id<TAB>название<TAB>режим)
+    theme-apply --current   id текущей темы
+    theme-apply --contrast N  задать усиление контраста 0..1 (по умолчанию 0.6)
+                              и переприменить текущую тему
+
+Контраст: фон тёмных тем тянется к чёрному, текст — к белому (для светлых
+наоборот), акценты не трогаются. Значение хранится в ~/.config/themes/contrast.
+
+Что переписывается:
+  hypr/theme.conf, waybar/colors/colors.css, swaync/colors/colors.css,
+  wofi/colors.css, alacritty/theme.toml, kitty/theme.conf,
+  gtk-3.0/gtk.css, gtk-4.0/gtk.css, kdeglobals (только секции Colors:*),
+  ~/.local/share/icons/ThemeAccent (Adwaita с папками в цвете акцента),
+  fastfetch/config.jsonc,
+  gsettings color-scheme/gtk-theme (Firefox и Chromium следуют за ними).
+"""
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+HOME = Path.home()
+CFG = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
+THEMES = CFG / "themes"
+CURRENT = THEMES / "current"
+CONTRAST = THEMES / "contrast"
+DEFAULT_CONTRAST = 0.6
+
+HEADER = "Сгенерировано theme-apply, не редактировать — правьте JSON в ~/.config/themes"
+
+
+def hexrgb(h):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def rgba(h, a):
+    r, g, b = hexrgb(h)
+    return f"rgba({r}, {g}, {b}, {a})"
+
+
+def mix(a, b, k):
+    ra, rb = hexrgb(a), hexrgb(b)
+    return "#%02x%02x%02x" % tuple(round(ra[i] * (1 - k) + rb[i] * k) for i in range(3))
+
+
+def contrast_level():
+    try:
+        return min(1.0, max(0.0, float(CONTRAST.read_text().strip())))
+    except (OSError, ValueError):
+        return DEFAULT_CONTRAST
+
+
+def boost(t, k):
+    """Усиливает контраст палитры: фоны к чёрному/белому, текст — в обратную сторону."""
+    if k <= 0:
+        return t
+    t = dict(t)
+    light = t["mode"] == "light"
+    far_bg, far_fg = ("#ffffff", "#000000") if light else ("#000000", "#ffffff")
+    for key, amount in (("bg", 0.8), ("bg_alt", 0.8), ("surface", 0.5), ("surface2", 0.35), ("black", 0.6)):
+        t[key] = mix(t[key], far_bg, k * amount)
+    for key, amount in (("fg", 0.5), ("fg_bright", 0.8), ("fg_dim", 0.35),
+                        ("white", 0.35), ("bright_white", 0.6)):
+        t[key] = mix(t[key], far_fg, k * amount)
+    return t
+
+
+def load(tid):
+    p = THEMES / f"{tid}.json"
+    if not p.exists():
+        sys.exit(f"нет темы {tid}: {p}")
+    return boost(json.load(open(p)), contrast_level())
+
+
+def list_themes():
+    out = []
+    for p in sorted(THEMES.glob("*.json")):
+        t = json.load(open(p))
+        out.append((t["id"], t["name"], t["mode"]))
+    return out
+
+
+def write(path, text):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if path.is_symlink():
+        path.unlink()
+    path.write_text(text)
+
+
+# ---------------------------------------------------------------- targets
+
+def hypr(t):
+    lines = [f"# {HEADER}", f"# Тема: {t['name']}"]
+    for k in ("bg", "bg_alt", "surface", "surface2", "fg", "fg_dim", "fg_bright",
+              "accent", "accent2", "red", "orange", "yellow", "green", "cyan", "blue", "magenta"):
+        lines.append(f"${k} = rgb({t[k].lstrip('#')})")
+    write(CFG / "hypr/theme.conf", "\n".join(lines) + "\n")
+
+
+def waybar(t):
+    css = f"""/* {HEADER} */
+/* {t['name']} */
+
+@define-color module-bg     {rgba(t['bg_alt'], 0.9)};
+@define-color tooltip-bg    @module-bg;
+@define-color inactive      {t['fg_dim']};
+@define-color fg            {t['fg']};
+@define-color workspace-fg  @fg;
+
+@define-color red           {t['red']};
+@define-color blue          {t['accent']};
+@define-color yellow        {t['yellow']};
+@define-color green         {t['green']};
+"""
+    write(CFG / "waybar/colors/colors.css", css)
+
+
+def swaync(t):
+    css = f"""/* {HEADER} */
+/* {t['name']} */
+@define-color center-bg                 {rgba(t['bg'], 0.8)};
+@define-color notification-bg           {rgba(t['bg'], 0.9)};
+@define-color center-notification-bg    {t['bg_alt']};
+@define-color background                {rgba(t['bg'], 0.9)};
+@define-color background-alt            {t['bg_alt']};
+@define-color text                      {t['fg']};
+@define-color text-alt                  {t['fg_dim']};
+@define-color selected                  alpha(@text-alt, .4);
+@define-color hover                     alpha(@selected, .4);
+@define-color urgent                    {t['red']};
+"""
+    write(CFG / "swaync/colors/colors.css", css)
+
+
+def wofi(t):
+    light = t["mode"] == "light"
+    css = f"""/* {HEADER} */
+/* {t['name']} */
+@define-color base      {t['bg']};
+@define-color surface   {t['surface'] if not light else t['bg']};
+@define-color text      {t['fg']};
+@define-color text-dim  {t['fg_dim']};
+@define-color text-sel  {t['fg_bright'] if not light else t['fg']};
+@define-color accent    {t['accent']};
+@define-color red       {t['red']};
+@define-color warm      {t['orange']};
+@define-color yellow    {t['yellow']};
+@define-color green     {t['green']};
+@define-color cool      {t['cyan']};
+@define-color blue      {t['blue']};
+@define-color purple    {t['magenta']};
+/* блик и тёмная грань стекла */
+@define-color glass-hi  {'#ffffff' if light else t['fg_bright']};
+@define-color glass-lo  {t['fg'] if light else t['bg']};
+"""
+    write(CFG / "wofi/colors.css", css)
+
+
+def alacritty(t):
+    toml = f"""# {HEADER}
+# {t['name']}
+[colors.primary]
+background = "{t['bg']}"
+foreground = "{t['fg']}"
+
+[colors.cursor]
+cursor = "{t['fg']}"
+
+[colors.selection]
+text = "CellForeground"
+background = "{t['surface2']}"
+
+[colors.normal]
+black = "{t['black']}"
+red = "{t['red']}"
+green = "{t['green']}"
+yellow = "{t['yellow']}"
+blue = "{t['blue']}"
+magenta = "{t['magenta']}"
+cyan = "{t['cyan']}"
+white = "{t['white']}"
+
+[colors.bright]
+black = "{t['bright_black']}"
+red = "{t['red']}"
+green = "{t['green']}"
+yellow = "{t['yellow']}"
+blue = "{t['blue']}"
+magenta = "{t['magenta']}"
+cyan = "{t['cyan']}"
+white = "{t['bright_white']}"
+"""
+    write(CFG / "alacritty/theme.toml", toml)
+
+
+def kitty(t):
+    conf = f"""# {HEADER}
+# {t['name']}
+background {t['bg']}
+foreground {t['fg']}
+cursor {t['fg']}
+selection_background {t['surface2']}
+selection_foreground {t['fg']}
+color0 {t['black']}
+color1 {t['red']}
+color2 {t['green']}
+color3 {t['yellow']}
+color4 {t['blue']}
+color5 {t['magenta']}
+color6 {t['cyan']}
+color7 {t['white']}
+color8 {t['bright_black']}
+color9 {t['red']}
+color10 {t['green']}
+color11 {t['yellow']}
+color12 {t['blue']}
+color13 {t['magenta']}
+color14 {t['cyan']}
+color15 {t['bright_white']}
+active_tab_background {t['accent']}
+active_tab_foreground {t['bg']}
+inactive_tab_background {t['surface']}
+inactive_tab_foreground {t['fg_dim']}
+"""
+    write(CFG / "kitty/theme.conf", conf)
+    kc = CFG / "kitty/kitty.conf"
+    if not kc.exists() or "include theme.conf" not in kc.read_text():
+        with open(kc, "a") as f:
+            f.write("\ninclude theme.conf\n")
+    # живая перезагрузка открытых kitty
+    subprocess.run(["pkill", "-USR1", "-x", "kitty"], check=False)
+
+
+def gtk(t):
+    light = t["mode"] == "light"
+    # libadwaita/GTK4 именованные цвета + те же для GTK3 (Adwaita их читает частично)
+    css = f"""/* {HEADER} */
+/* {t['name']} */
+@define-color accent_color {t['accent']};
+@define-color accent_bg_color {t['accent']};
+@define-color accent_fg_color {t['bg'] if not light else '#ffffff'};
+@define-color window_bg_color {t['bg']};
+@define-color window_fg_color {t['fg']};
+@define-color view_bg_color {t['bg_alt'] if not light else '#ffffff'};
+@define-color view_fg_color {t['fg']};
+@define-color headerbar_bg_color {t['bg_alt']};
+@define-color headerbar_fg_color {t['fg']};
+@define-color headerbar_border_color {t['surface']};
+@define-color headerbar_backdrop_color @window_bg_color;
+@define-color sidebar_bg_color {t['bg_alt']};
+@define-color sidebar_fg_color {t['fg']};
+@define-color sidebar_backdrop_color @window_bg_color;
+@define-color card_bg_color {t['surface'] if not light else '#ffffff'};
+@define-color card_fg_color {t['fg']};
+@define-color dialog_bg_color {t['bg_alt']};
+@define-color dialog_fg_color {t['fg']};
+@define-color popover_bg_color {t['bg_alt']};
+@define-color popover_fg_color {t['fg']};
+@define-color destructive_color {t['red']};
+@define-color destructive_bg_color {t['red']};
+@define-color success_color {t['green']};
+@define-color warning_color {t['yellow']};
+@define-color error_color {t['red']};
+@define-color borders {t['surface']};
+@define-color theme_bg_color {t['bg']};
+@define-color theme_fg_color {t['fg']};
+@define-color theme_base_color {t['bg_alt'] if not light else '#ffffff'};
+@define-color theme_text_color {t['fg']};
+@define-color theme_selected_bg_color {t['accent']};
+@define-color theme_selected_fg_color {t['bg'] if not light else '#ffffff'};
+"""
+    write(CFG / "gtk-3.0/gtk.css", css)
+    write(CFG / "gtk-4.0/gtk.css", css)
+    scheme = "prefer-light" if light else "prefer-dark"
+    theme = "Adwaita" if light else "Adwaita-dark"
+    for key, val in (("color-scheme", scheme), ("gtk-theme", theme)):
+        subprocess.run(["gsettings", "set", "org.gnome.desktop.interface", key, val], check=False)
+    # GTK3-приложения без портала читают settings.ini
+    ini = CFG / "gtk-3.0/settings.ini"
+    write(ini, f"[Settings]\ngtk-theme-name={theme}\ngtk-icon-theme-name={ICON_THEME}\n"
+               f"gtk-application-prefer-dark-theme={0 if light else 1}\n")
+
+
+# Оттенки синего в папках Adwaita: (цвет, роль). Перекрашиваем в акцент темы,
+# сохраняя относительную светлоту каждого оттенка.
+ADWAITA_FOLDER = ["#438de6", "#62a0ea", "#a4caee", "#afd4ff", "#c0d5ea"]
+ADWAITA_MAIN = "#62a0ea"
+ICON_THEME = "ThemeAccent"
+
+
+def _hls(h):
+    import colorsys
+    r, g, b = (c / 255 for c in hexrgb(h))
+    return colorsys.rgb_to_hls(r, g, b)
+
+
+def _from_hls(h, l, s):
+    import colorsys
+    r, g, b = colorsys.hls_to_rgb(h, max(0, min(1, l)), max(0, min(1, s)))
+    return "#%02x%02x%02x" % (round(r * 255), round(g * 255), round(b * 255))
+
+
+def icons(t):
+    """Тема иконок ~/.local/share/icons/ThemeAccent: Adwaita + папки в цвете акцента."""
+    src = Path("/usr/share/icons/Adwaita/scalable")
+    if not src.is_dir():
+        return
+    dst = HOME / ".local/share/icons" / ICON_THEME
+    ah, al, as_ = _hls(t["accent"])
+    _, ml, ms = _hls(ADWAITA_MAIN)
+    table = {}
+    for c in ADWAITA_FOLDER:
+        _, l, sat = _hls(c)
+        table[c] = _from_hls(ah, al + (l - ml), as_ * (sat / ms if ms else 1))
+    files = list((src / "places").glob("folder*.svg")) + list((src / "places").glob("user-*.svg")) \
+        + [src / "status/folder-open.svg"]
+    for f in files:
+        rel = f.relative_to(src)
+        svg = f.read_text()
+        if not any(c in svg for c in table):
+            continue
+        for old, new in table.items():
+            svg = svg.replace(old, new)
+        out = dst / "scalable" / rel
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(svg)
+        # мелкие растровые размеры рендерим из перекрашенного svg
+        try:
+            import gi
+            gi.require_version("GdkPixbuf", "2.0")
+            from gi.repository import GdkPixbuf
+            for size in (16, 24, 32):
+                pb = GdkPixbuf.Pixbuf.new_from_file_at_size(str(out), size, size)
+                png = dst / f"{size}x{size}" / rel.with_suffix(".png")
+                png.parent.mkdir(parents=True, exist_ok=True)
+                pb.savev(str(png), "png", [], [])
+        except Exception:
+            pass
+    dirs = ["scalable/places", "scalable/status"] + [f"{n}x{n}/places" for n in (16, 24, 32)] \
+        + [f"{n}x{n}/status" for n in (16, 24, 32)]
+    index = [f"[Icon Theme]\nName={ICON_THEME}\nComment={HEADER}\nInherits=Adwaita,hicolor\n"
+             f"Directories={','.join(dirs)}\n"]
+    for d in dirs:
+        size = "16" if d.startswith("scalable") else d.split("x")[0]
+        typ = "Scalable\nMinSize=8\nMaxSize=512" if d.startswith("scalable") else "Fixed"
+        index.append(f"[{d}]\nSize={size}\nContext={'Places' if 'places' in d else 'Status'}\nType={typ}\n")
+    write(dst / "index.theme", "\n".join(index))
+    subprocess.run(["gtk-update-icon-cache", "-f", "-q", str(dst)], check=False)
+    for f in dst.rglob("*"):
+        if f.is_dir():
+            os.utime(f)  # GTK следит за mtime каталогов темы
+    subprocess.run(["gsettings", "set", "org.gnome.desktop.interface", "icon-theme", ICON_THEME], check=False)
+
+
+def fastfetch(t):
+    """~/.config/fastfetch/config.jsonc: цвета темы, короткий список модулей, рамка.
+
+    Правая грань рамки держится на выравнивании значений до фиксированной ширины
+    ({N<W} в format) — поэтому у каждого модуля формат задан явно."""
+    import getpass
+
+    def ansi(h):
+        r, g, b = hexrgb(h)
+        return f"38;2;{r};{g};{b}"
+    acc, acc2, fgc, mute = ansi(t["accent"]), ansi(t["accent2"]), ansi(t["fg"]), ansi(t["fg_dim"])
+    KEYW, VALW = 18, 40                       # ширина ключа и значения
+    inner = KEYW + VALW                       # ширина ключа у fastfetch включает separator
+    edge = f"{{#{acc}}}│"
+
+    def sect(title):
+        return {"type": "custom", "format": f"{{#{acc}}}├─ {{#{acc2}}}{title} {{#{acc}}}{'─' * (inner - len(title) - 5)}┤"}
+
+    def mod(typ, icon, key, fmt, **extra):
+        m = {"type": typ, "key": f"{{#{acc}}}│ {{#{acc2}}}{icon}  {{#{fgc}}}{key}",
+             "format": f"{{#{fgc}}}{fmt}{edge}"}
+        m.update(extra)
+        return m
+
+    user = getpass.getuser()
+    cfg = {
+        "$schema": "https://github.com/fastfetch-cli/fastfetch/raw/dev/doc/json_schema.json",
+        "logo": {
+            "type": "file",
+            "source": str(CFG / "fastfetch/logo.txt"),
+            "color": {"1": acc, "2": acc2},
+            "padding": {"top": 2, "left": 1, "right": 3},
+        },
+        "display": {
+            "separator": "  ",
+            "key": {"width": KEYW},
+            "color": {"keys": acc, "title": acc2, "output": fgc},
+        },
+        "modules": [
+            {"type": "custom", "format": f"{{#{acc}}}╭{'─' * (inner - 2)}╮"},
+            mod("title", "󰀄", "user", f"{{#{acc2}}}{{1}}{{#{mute}}}@{{#{fgc}}}{{2<{VALW - len(user) - 1}}}"),
+            sect("system"),
+            mod("os", "󰌽", "os", f"{{3<{VALW}}}"),
+            mod("kernel", "󰒋", "kernel", f"{{2<{VALW}}}"),
+            mod("wm", "󰖟", "wm", f"{{2<9}}{{5<{VALW - 9}}}"),
+            mod("uptime", "󰥔", "uptime", "{1>2}d {2>2}h {3>2}m" + " " * (VALW - 11)),
+            mod("packages", "󰏖", "packages", "{4<5} dpkg" + " " * (VALW - 10)),
+            mod("shell", "󰆍", "shell", f"{{3<4}}{{4<{VALW - 4}}}"),
+            sect("hardware"),
+            mod("cpu", "󰻠", "cpu", f"{{1<{VALW}}}"),
+            mod("gpu", "󰢮", "gpu", f"{{2<{VALW}}}"),
+            mod("memory", "󰍛", "memory", "{1>9} / {2>10} ({3})" + " " * (VALW - 28)),
+            mod("disk", "󰋊", "disk", "{1>9} / {2>10} ({3}) {9<7}" + " " * (VALW - 36), folders="/"),
+            mod("battery", "󰁹", "battery", f"{{4>3}}% {{5<{VALW - 5}}}", percent={"type": 1}),
+            {"type": "custom", "format": f"{{#{acc}}}╰{'─' * (inner - 2)}╯"},
+            {"type": "colors", "symbol": "circle", "paddingLeft": 3},
+        ],
+    }
+    write(CFG / "fastfetch/config.jsonc", f"// {HEADER}\n// {t['name']}\n" + json.dumps(cfg, indent=2, ensure_ascii=False) + "\n")
+
+
+def kdeglobals(t):
+    """Qt/KDE (dolphin и т.п.): переписываем только секции Colors:* и General."""
+    light = t["mode"] == "light"
+    fg = t["fg"]
+
+    def sec(name, bg, alt, text):
+        return f"""[Colors:{name}]
+BackgroundNormal={','.join(map(str, hexrgb(bg)))}
+BackgroundAlternate={','.join(map(str, hexrgb(alt)))}
+ForegroundNormal={','.join(map(str, hexrgb(text)))}
+ForegroundInactive={','.join(map(str, hexrgb(t['fg_dim'])))}
+ForegroundActive={','.join(map(str, hexrgb(t['accent'])))}
+ForegroundLink={','.join(map(str, hexrgb(t['blue'])))}
+ForegroundVisited={','.join(map(str, hexrgb(t['magenta'])))}
+ForegroundNegative={','.join(map(str, hexrgb(t['red'])))}
+ForegroundNeutral={','.join(map(str, hexrgb(t['yellow'])))}
+ForegroundPositive={','.join(map(str, hexrgb(t['green'])))}
+DecorationFocus={','.join(map(str, hexrgb(t['accent'])))}
+DecorationHover={','.join(map(str, hexrgb(t['accent'])))}
+"""
+    view_bg = t["bg_alt"] if not light else "#ffffff"
+    block = "\n".join([
+        f"[General]\nColorScheme={t['name'].replace(' ', '')}\nName={t['name']}\n",
+        sec("Window", t["bg"], t["bg_alt"], fg),
+        sec("View", view_bg, t["bg"], fg),
+        sec("Button", t["surface"], t["surface2"], fg),
+        sec("Selection", t["accent"], t["accent2"], t["bg"] if not light else "#ffffff"),
+        sec("Tooltip", t["bg_alt"], t["surface"], fg),
+        sec("Complementary", t["bg_alt"], t["surface"], fg),
+        sec("Header", t["bg_alt"], t["surface"], fg),
+    ])
+    p = CFG / "kdeglobals"
+    old = p.read_text() if p.exists() else ""
+    # выкидываем старые секции General и Colors:*
+    parts = re.split(r"(?m)^(?=\[)", old)
+    keep = [s for s in parts if s.strip() and not re.match(r"\[(General|Colors:)", s)]
+    write(p, block + "\n" + "".join(keep))
+
+
+def reload_apps():
+    subprocess.run(["hyprctl", "reload"], check=False, capture_output=True)
+    # SIGUSR2 (перечитать CSS) у этого waybar роняет его в segfault на tray,
+    # поэтому перезапускаем целиком через обёртку с повторами
+    subprocess.run(["pkill", "-f", "^/bin/sh .*waybar-autostart"], check=False)
+    subprocess.run(["pkill", "-x", "waybar"], check=False)
+    for _ in range(40):  # ждём, пока старый waybar реально выйдет
+        if subprocess.run(["pgrep", "-x", "waybar"], capture_output=True).returncode != 0:
+            break
+        time.sleep(0.05)
+    subprocess.Popen(["setsid", "-f", str(HOME / ".local/bin/waybar-autostart")],
+                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(["swaync-client", "--reload-css"], check=False, capture_output=True)
+
+
+# ------------------------------------------------------------------ main
+
+def main(argv):
+    if not argv or argv[0] in ("-h", "--help"):
+        print(__doc__)
+        return 0
+    if argv[0] == "--list":
+        for tid, name, mode in list_themes():
+            print(f"{tid}\t{name}\t{mode}")
+        return 0
+    if argv[0] == "--current":
+        print(CURRENT.read_text().strip() if CURRENT.exists() else "")
+        return 0
+    if argv[0] == "--contrast":
+        CONTRAST.write_text(argv[1] + "\n")
+        cur = CURRENT.read_text().strip() if CURRENT.exists() else "nord"
+        return main([cur, "--quiet"])
+
+    t = load(argv[0])
+    for step in (hypr, waybar, swaync, wofi, alacritty, kitty, gtk, icons, fastfetch, kdeglobals):
+        try:
+            step(t)
+        except Exception as e:  # одна сломанная цель не должна валить остальные
+            print(f"theme-apply: {step.__name__}: {e}", file=sys.stderr)
+    CURRENT.write_text(t["id"] + "\n")
+    reload_apps()
+    if "--quiet" not in argv:
+        subprocess.run(["notify-send", "-a", "Тема", "-i", "preferences-desktop-theme",
+                        f"Тема: {t['name']}", "Применена ко всей системе"], check=False)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

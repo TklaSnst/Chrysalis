@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+"""Меню выбора темы в wofi: список тем с палитрой-свотчем, текущая помечена.
+После выбора вызывается theme-apply <id>."""
+import hashlib
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+from PIL import Image, ImageDraw
+
+HOME = Path.home()
+CFG = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
+CACHE = Path(os.environ.get("XDG_CACHE_HOME", HOME / ".cache")) / "wofi-themes"
+THEMES = CFG / "themes"
+SW, SH = 200, 40
+
+
+def hexrgb(h):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def swatch(t) -> Path:
+    key = hashlib.md5(json.dumps(t, sort_keys=True).encode()).hexdigest()
+    dst = CACHE / f"{key}.png"
+    if dst.exists():
+        return dst
+    im = Image.new("RGBA", (SW, SH), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    d.rounded_rectangle((0, 0, SW - 1, SH - 1), 12, fill=hexrgb(t["bg"]),
+                        outline=hexrgb(t["surface2"]), width=1)
+    cols = ["accent", "red", "orange", "yellow", "green", "cyan", "magenta", "fg"]
+    r, gap = 11, 24
+    x0 = (SW - (len(cols) - 1) * gap) // 2
+    for i, k in enumerate(cols):
+        x, y = x0 + i * gap, SH // 2
+        d.ellipse((x - r, y - r, x + r, y + r), fill=hexrgb(t[k]))
+    im.save(dst)
+    return dst
+
+
+def main():
+    CACHE.mkdir(parents=True, exist_ok=True)
+    cur = (THEMES / "current").read_text().strip() if (THEMES / "current").exists() else ""
+    themes = [json.load(open(p)) for p in sorted(THEMES.glob("*.json"))]
+    lines, ids = [], []
+    for t in themes:
+        tags = []
+        if t["mode"] == "light":
+            tags.append("светлая")
+        if t["id"] == cur:
+            tags.append("текущая")
+        suffix = f"  · {', '.join(tags)}" if tags else ""
+        line = f"img:{swatch(t)}:text:{t['name']}{suffix}"
+        lines.append(line)
+        ids.append(t["id"])
+
+    r = subprocess.run(
+        ["wofi", "--dmenu", "--allow-images", "--conf", str(CFG / "wofi/theme"),
+         "--style", str(CFG / "wofi/style.css"), "--prompt", "Тема",
+         "--define", "dmenu-print_line_num=true"],
+        input="\n".join(lines) + "\n", capture_output=True, text=True)
+    out = r.stdout.strip()
+    if out.isdigit() and int(out) < len(ids):
+        subprocess.run([str(HOME / ".local/bin/theme-apply"), ids[int(out)]])
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

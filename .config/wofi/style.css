@@ -1,29 +1,146 @@
-@import "/home/knm/.config/wofi/colors.css";
-window {
-    background: @bg;
-    border: 1px solid @border;
-    border-radius: 12px;
-    font-family: JetBrainsMono Nerd Font;
-    font-size: 13px;
+/* Цвета берутся из colors.css — его генерирует theme-apply */
+@import url("colors.css");
+
+* {
+    all: unset;
+    font-family: 'CodeNewRoman Nerd Font Mono', monospace;
+    font-size: 18px;
+    font-weight: bold;
+    outline: none;
+    border: none;
+    text-shadow: none;
+    background-color: transparent;
 }
 
-#input {
-    margin: 10px;
-    padding: 8px;
-    border-radius: 8px;
-    background: @bg_window;
-    color: @fg;
+/* Стекло рисует сам слой (window): у него размер ровно 500x400, как
+   wofi сообщает Hyprland. Любые margin/border/padding на #outer-box
+   раздувают поверхность и ломают центровку popin-анимации.
+   Блюр под слоем даёт Hyprland (layerrule wofi-glass), баунс —
+   animation = layersIn ... bounce, popin 85% */
+window {
+    all: unset;
+    padding: 6px;
+    border: 1px solid alpha(@glass-hi, 0.20);
+    border-radius: 26px;
+    background-color: alpha(@surface, 0.40);
+    /* блик-«линза»: светлее у верхнего левого края, темнее к низу */
+    background-image: linear-gradient(to bottom right,
+                          alpha(@glass-hi, 0.20) 0%,
+                          alpha(@text, 0.05) 40%,
+                          alpha(@glass-lo, 0.10) 100%);
+    /* дисперсия: хроматическая кромка (тёплый оттенок слева-сверху,
+       холодный справа-снизу) + белый блик по верху + внутреннее свечение */
+    box-shadow: inset 0 1px 0 alpha(@glass-hi, 0.40),
+                inset 1px 0 0 alpha(@warm, 0.28),
+                inset -1px 0 0 alpha(@cool, 0.30),
+                inset 0 -1px 0 alpha(@purple, 0.26),
+                inset 2px 2px 3px alpha(@yellow, 0.10),
+                inset -2px -2px 3px alpha(@blue, 0.12),
+                inset 0 0 28px alpha(@glass-hi, 0.06);
+}
+
+/* Внутренние коробки без собственных отступов и рамок */
+#outer-box {
+    margin: 0;
+    padding: 0;
+    border: none;
+    background-color: transparent;
+}
+
+#inner-box {
+    margin: 2px;
+    padding: 5px;
     border: none;
 }
 
+#scroll {
+    margin: 0px;
+    padding: 6px;
+    border: none;
+}
+
+/* ===================== Поле ввода ===================== */
+#input {
+    all: unset;
+    margin: 14px 14px 4px 14px;
+    padding: 14px 18px;
+    color: @glass-hi;
+    border: 1px solid alpha(@glass-hi, 0.18);
+    border-radius: 16px;
+    background-color: alpha(@glass-lo, 0.22);
+    background-image: linear-gradient(to bottom,
+                          alpha(@glass-hi, 0.10),
+                          alpha(@glass-lo, 0.05));
+    box-shadow: inset 0 1px 0 alpha(@glass-hi, 0.26),
+                inset 1px 0 0 alpha(@warm, 0.14),
+                inset -1px 0 0 alpha(@cool, 0.16),
+                0 2px 8px rgba(0, 0, 0, 0.30);
+    transition: background-color 200ms ease,
+                border-color 200ms ease,
+                box-shadow 200ms ease;
+}
+
+#input:focus {
+    outline: none;
+    border: 1px solid alpha(@cool, 0.55);
+    border-radius: 16px;
+    background-color: alpha(@glass-lo, 0.30);
+    box-shadow: inset 0 1px 0 alpha(@glass-hi, 0.30),
+                0 4px 14px rgba(0, 0, 0, 0.40);
+}
+
+#input image {
+    border: none;
+    color: @text;
+    padding-right: 10px;
+}
+
+#input * {
+    border: none;
+    outline: none;
+}
+
+/* ===================== Элементы списка ===================== */
+#text {
+    margin: 5px;
+    border: none;
+    color: @text;
+    outline: none;
+}
+
 #entry {
-    padding: 8px;
-    margin: 2px 6px;
-    border-radius: 8px;
-    color: @fg_dim;
+    margin: 3px 6px;
+    padding: 10px 12px;
+    border: 1px solid transparent;
+    border-radius: 18px;
+    transition: background-color 180ms ease,
+                border-color 180ms ease,
+                box-shadow 180ms ease;
+}
+
+#entry arrow {
+    border: none;
+    color: @red;
 }
 
 #entry:selected {
-    background: @accent;
-    color: @bg;
+    border: 1px solid alpha(@glass-hi, 0.24);
+    border-radius: 18px;
+    background-color: alpha(@glass-hi, 0.10);
+    background-image: linear-gradient(to bottom,
+                          alpha(@glass-hi, 0.15),
+                          alpha(@glass-hi, 0.03));
+    box-shadow: inset 0 1px 0 alpha(@glass-hi, 0.34),
+                inset 1px 0 0 alpha(@warm, 0.20),
+                inset -1px 0 0 alpha(@cool, 0.22),
+                inset 0 -1px 0 alpha(@purple, 0.18),
+                0 4px 12px rgba(0, 0, 0, 0.28);
+}
+
+#entry:selected #text {
+    color: @text-sel;
+}
+
+#entry:drop(active) {
+    background-color: @accent;
 }

@@ -1,0 +1,113 @@
+#!/usr/bin/env python3
+"""Меню выбора обоев в wofi: сетка миниатюр, выбранная — подсвечена.
+После выбора обои применяются через wallpaper-set (плавный переход).
+
+Ищет картинки в ~/.config/wallpapers и ~/Pictures/Wallpapers."""
+import hashlib
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+from PIL import Image, ImageDraw, ImageFont
+
+HOME = Path.home()
+CFG = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
+CACHE = Path(os.environ.get("XDG_CACHE_HOME", HOME / ".cache")) / "wofi-wallpapers"
+DIRS = [CFG / "wallpapers", HOME / "Pictures" / "Wallpapers"]
+EXT = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+TW, TH = 340, 191  # размер миниатюры (16:9)
+RADIUS = 18
+FONT = "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf"
+
+
+def font(size):
+    try:
+        return ImageFont.truetype(FONT, size)
+    except OSError:
+        return ImageFont.load_default()
+
+
+def thumb(src: Path, label: str, current: bool) -> Path:
+    st = src.stat()
+    key = hashlib.md5(f"{src}:{st.st_mtime_ns}:{TW}x{TH}:{label}:{current}".encode()).hexdigest()
+    dst = CACHE / f"{key}.png"
+    if dst.exists():
+        return dst
+    im = Image.open(src).convert("RGB")
+    # crop по центру до 16:9, затем уменьшаем
+    w, h = im.size
+    if w / h > TW / TH:
+        nw = int(h * TW / TH)
+        im = im.crop(((w - nw) // 2, 0, (w - nw) // 2 + nw, h))
+    else:
+        nh = int(w * TH / TW)
+        im = im.crop((0, (h - nh) // 2, w, (h - nh) // 2 + nh))
+    im = im.resize((TW, TH), Image.LANCZOS)
+    mask = Image.new("L", (TW, TH), 0)
+    ImageDraw.Draw(mask).rounded_rectangle((0, 0, TW - 1, TH - 1), RADIUS, fill=255)
+    out = Image.new("RGBA", (TW, TH), (0, 0, 0, 0))
+    out.paste(im, (0, 0), mask)
+    # подпись на «стеклянной» плашке снизу
+    over = Image.new("RGBA", (TW, TH), (0, 0, 0, 0))
+    od = ImageDraw.Draw(over)
+    f = font(17)
+    tw = od.textlength(label, font=f)
+    od.rounded_rectangle((10, TH - 40, 10 + tw + 24, TH - 10), 12, fill=(10, 10, 14, 150))
+    od.text((22, TH - 36), label, font=f, fill=(240, 240, 245, 255))
+    if current:
+        od.ellipse((TW - 30, 12, TW - 12, 30), fill=(255, 255, 255, 230))
+        od.ellipse((TW - 26, 16, TW - 16, 26), fill=(40, 160, 90, 255))
+    out = Image.alpha_composite(out, over)
+    out.save(dst)
+    return dst
+
+
+def pretty(p: Path) -> str:
+    name = p.stem
+    if name.startswith("theme-"):
+        name = name[6:].replace("-", " ").title()
+    return name
+
+
+def main():
+    CACHE.mkdir(parents=True, exist_ok=True)
+    current = CFG / "wallpapers" / "current"
+    cur = current.resolve() if current.exists() else None
+
+    files = []
+    for d in DIRS:
+        if d.is_dir():
+            files += [p for p in sorted(d.iterdir())
+                      if p.suffix.lower() in EXT and not p.is_symlink()]
+    if not files:
+        subprocess.run(["notify-send", "Обои", "Нет картинок в ~/.config/wallpapers"])
+        return 1
+
+    lines, items = [], []
+    for p in files:
+        is_cur = bool(cur and p.resolve() == cur)
+        try:
+            t = thumb(p, pretty(p), is_cur)
+        except Exception as e:
+            print(f"пропуск {p}: {e}", file=sys.stderr)
+            continue
+        # подпись нарисована на миниатюре; текст нужен только для поиска
+        line = f"img:{t}:text:{pretty(p)}"
+        lines.append(line)
+        items.append(p)
+
+    r = subprocess.run(
+        ["wofi", "--dmenu", "--allow-images", "--conf", str(CFG / "wofi/wallpaper"),
+         "--style", str(CFG / "wofi/style-wallpaper.css"), "--prompt", "Обои",
+         "--define", "dmenu-print_line_num=true"],
+        input="\n".join(lines) + "\n", capture_output=True, text=True)
+    out = r.stdout.strip()
+    if not out.isdigit() or int(out) >= len(items):
+        return 0
+    subprocess.run([str(HOME / ".local/bin/wallpaper-set"), str(items[int(out)])])
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

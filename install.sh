@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # =============================================================================
-# betterdeb — automated installer
+# Chrysalis — automated installer
+# Hyprland + waybar + wofi + swaync + alacritty with a JSON-driven theme system
 # =============================================================================
 
 set -euo pipefail
@@ -15,21 +16,23 @@ DRY_RUN=false
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CFG="${XDG_CONFIG_HOME:-$HOME/.config}"
+BIN="$HOME/.local/bin"
+FONTS="${XDG_DATA_HOME:-$HOME/.local/share}/fonts"
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 print_header() {
     clear
     echo -e "${M}"
     cat << 'BANNER'
- _          _   _            _      _
-| |__   ___| |_| |_ ___ _ __| |  __| | ___| |__
-| '_ \ / _ \ __| __/ _ \ '__| | / _` |/ _ \ '_ \
-| |_) |  __/ |_| ||  __/ |  | || (_| |  __/ |_) |
-|_.__/ \___|\__|\__\___|_|  |_| \__,_|\___|_.__/
-
+   ____ _                          _ _
+  / ___| |__  _ __ _   _ ___  __ _| (_)___
+ | |   | '_ \| '__| | | / __|/ _` | | / __|
+ | |___| | | | |  | |_| \__ \ (_| | | \__ \
+  \____|_| |_|_|   \__, |___/\__,_|_|_|___/
+                   |___/
 BANNER
-    echo -e "${D}  ${C}A clean Debian/Ubuntu Wayland setup${D}"
-    echo -e "  ${W}https://github.com/TklaSnst/betterdeb${D}\n"
+    echo -e "${D}  ${C}A clean Debian/Ubuntu Hyprland setup${D}"
+    echo -e "  ${W}https://github.com/TklaSnst/Chrysalis${D}\n"
 }
 
 step()    { echo -e "\n${B}━━━ ${W}$*${D}"; }
@@ -68,7 +71,7 @@ detect_os() {
     OS_ID="${ID:-unknown}"
     OS_ID_LIKE="${ID_LIKE:-}"
     OS_NAME="${PRETTY_NAME:-$NAME}"
-    OS_VERSION="${VERSION_CODENAME:-${VERSION_ID:-}}"
+    OS_CODENAME="${VERSION_CODENAME:-}"
 
     if ! command -v apt &>/dev/null; then
         fail "This installer requires apt (Debian/Ubuntu)."
@@ -76,52 +79,40 @@ detect_os() {
     fi
 
     ok "Detected: ${OS_NAME}"
-    if [[ "$OS_VERSION" ]]; then
-        info "Codename: ${OS_VERSION}"
+    if [[ "$OS_CODENAME" ]]; then
+        info "Codename: ${OS_CODENAME}"
     fi
 }
 
 # ─── User Questions ────────────────────────────────────────────────────────────
 ask_questions() {
-    # WM choice
-    ask "Which window manager would you like to install?"
-    select WM_CHOICE in "Hyprland" "Sway" "Both"; do
-        case "$WM_CHOICE" in
-            Hyprland|Sway|Both) break ;;
-            *) warn "Please choose 1, 2, or 3." ;;
-        esac
+    # Theme list comes straight from the JSON palettes
+    ask "Which color theme should be applied first?"
+    local ids=() names=()
+    for f in "$REPO_DIR"/.config/themes/*.json; do
+        ids+=("$(basename "$f" .json)")
+        names+=("$(python3 -c 'import json,sys; t=json.load(open(sys.argv[1])); print(t["name"], "(" + t["mode"] + ")")' "$f")")
     done
-    ok "Window manager: ${WM_CHOICE}"
-
-    # Terminal
-    ask "Which terminal emulator?"
-    select TERM_CHOICE in "kitty" "alacritty" "foot"; do
-        case "$TERM_CHOICE" in
-            kitty|alacritty|foot) break ;;
-            *) warn "Please choose 1, 2, or 3." ;;
-        esac
-    done
-    ok "Terminal: ${TERM_CHOICE}"
-
-    # Default theme
-    ask "Which default color theme?"
-    select THEME_CHOICE in "Catppuccin Mocha" "Nord" "Everforest Dark" "Gruvbox Dark" "Tokyo Night" "Kanagawa"; do
-        case "$THEME_CHOICE" in
-            "Catppuccin Mocha") THEME_ID="catppuccin"; break ;;
-            "Nord")             THEME_ID="nord";        break ;;
-            "Everforest Dark")  THEME_ID="everforest";  break ;;
-            "Gruvbox Dark")     THEME_ID="gruvbox";     break ;;
-            "Tokyo Night")      THEME_ID="tokyonight";  break ;;
-            "Kanagawa")         THEME_ID="kanagawa";    break ;;
-            *) warn "Please choose 1–6." ;;
-        esac
+    select THEME_NAME in "${names[@]}"; do
+        if [[ -n "$THEME_NAME" ]]; then
+            THEME_ID="${ids[$((REPLY - 1))]}"
+            break
+        fi
+        warn "Please choose 1–${#names[@]}."
     done
     ok "Theme: ${THEME_ID}"
 
-    # Optional extras
-    ask "Install optional extras? (thunar, pavucontrol, blueman)"
+    ask "Install optional extras? (kitty, blueman, htop, thunar, pavucontrol)"
     select EXTRAS_CHOICE in "Yes" "No"; do
         case "$EXTRAS_CHOICE" in
+            Yes|No) break ;;
+            *) warn "Please choose 1 or 2." ;;
+        esac
+    done
+
+    ask "Download Nerd Fonts (CaskaydiaCove + JetBrainsMono, ~30 MB)? Needed for bar/menu icons."
+    select FONTS_CHOICE in "Yes" "No"; do
+        case "$FONTS_CHOICE" in
             Yes|No) break ;;
             *) warn "Please choose 1 or 2." ;;
         esac
@@ -129,81 +120,75 @@ ask_questions() {
 }
 
 # ─── Package Lists ────────────────────────────────────────────────────────────
-PKGS_BASE=(
-    waybar rofi cava grim slurp wl-clipboard
-    wl-color-picker hyprpicker
-    playerctl pipewire wireplumber
-    python3 python3-yaml
-    fonts-jetbrains-mono
-    papirus-icon-theme
-    swaybg hypridle
-    dunst libnotify-bin
-    xdg-utils xdg-user-dirs
-    brightnessctl
-    network-manager
-    network-manager-gnome
-)
-
 PKGS_HYPRLAND=(
     hyprland
     xdg-desktop-portal-hyprland
     xdg-desktop-portal-gtk
-    hyprlock
     qt6-wayland
 )
 
-PKGS_SWAY=(
-    sway
-    swaylock
-    swayidle
-    xdg-desktop-portal-wlr
-    xdg-desktop-portal-gtk
+PKGS_BASE=(
+    # bar / launcher / notifications / wallpaper
+    waybar wofi rofi sway-notification-center swaybg
+    # terminal & tools shown in the menus
+    alacritty fastfetch librespeed-cli
+    # screenshots, clipboard, media & hardware keys
+    grim slurp grimshot wl-clipboard playerctl brightnessctl
+    # audio
+    pipewire pipewire-pulse wireplumber pulseaudio-utils
+    # network / bluetooth applets used by waybar
+    network-manager network-manager-gnome blueman
+    # theme system & wallpaper transition (python + GTK layer-shell)
+    python3 python3-pil python3-gi python3-gi-cairo
+    gir1.2-gtk-3.0 gir1.2-gtklayershell-0.1 libnotify-bin
+    # GTK/icon theming targets of theme-apply
+    adwaita-icon-theme libgtk-3-bin libglib2.0-bin dconf-cli
+    # fonts
+    fonts-jetbrains-mono fonts-noto fonts-noto-color-emoji
+    # misc
+    polkitd xdg-utils xdg-user-dirs curl unzip
 )
 
-PKGS_KITTY=(kitty)
-PKGS_ALACRITTY=(alacritty)
-PKGS_FOOT=(foot)
-
 PKGS_EXTRAS=(
+    kitty
+    htop
     thunar
     thunar-archive-plugin
     file-roller
     pavucontrol
-    blueman
 )
 
 build_pkg_list() {
     PKGS=("${PKGS_BASE[@]}")
-
-    case "$WM_CHOICE" in
-        Hyprland) PKGS+=("${PKGS_HYPRLAND[@]}") ;;
-        Sway)     PKGS+=("${PKGS_SWAY[@]}") ;;
-        Both)     PKGS+=("${PKGS_HYPRLAND[@]}" "${PKGS_SWAY[@]}") ;;
-    esac
-
-    case "$TERM_CHOICE" in
-        kitty)     PKGS+=("${PKGS_KITTY[@]}") ;;
-        alacritty) PKGS+=("${PKGS_ALACRITTY[@]}") ;;
-        foot)      PKGS+=("${PKGS_FOOT[@]}") ;;
-    esac
-
-    [[ "$EXTRAS_CHOICE" == "Yes" ]] && PKGS+=("${PKGS_EXTRAS[@]}")
+    if [[ "$EXTRAS_CHOICE" == "Yes" ]]; then
+        PKGS+=("${PKGS_EXTRAS[@]}")
+    fi
 }
 
-# ─── PPA / Repository Setup ───────────────────────────────────────────────────
+# ─── Repository Setup ─────────────────────────────────────────────────────────
+# hyprland.conf uses the windowrule{}/layerrule{} block syntax and `hyprctl eval`,
+# which need Hyprland ≥ 0.54. On Debian stable that lives in backports.
+HYPR_APT_OPTS=()
 setup_repos() {
     step "Setting up package repositories"
 
     if [[ "$OS_ID" == "ubuntu" || "$OS_ID_LIKE" == *ubuntu* ]]; then
-        # Hyprland is not in Ubuntu repos — use the community PPA
-        if [[ "$WM_CHOICE" == "Hyprland" || "$WM_CHOICE" == "Both" ]]; then
-            if ! grep -r "hyprland" /etc/apt/sources.list.d/ &>/dev/null 2>&1; then
-                info "Adding Hyprland PPA..."
-                run $SUDO add-apt-repository -y ppa:hyprland-contrib/hyprland || true
-            else
-                ok "Hyprland PPA already present"
-            fi
+        if ! grep -rq "hyprland" /etc/apt/sources.list.d/ 2>/dev/null; then
+            info "Adding Hyprland PPA..."
+            run $SUDO add-apt-repository -y ppa:hyprland-contrib/hyprland || true
+        else
+            ok "Hyprland PPA already present"
         fi
+    elif [[ "$OS_ID" == "debian" && -n "$OS_CODENAME" ]]; then
+        local bp="${OS_CODENAME}-backports"
+        if ! grep -rqs "$bp" /etc/apt/sources.list /etc/apt/sources.list.d/; then
+            info "Enabling ${bp}..."
+            run $SUDO tee /etc/apt/sources.list.d/chrysalis-backports.list >/dev/null \
+                <<< "deb http://deb.debian.org/debian ${bp} main contrib non-free non-free-firmware"
+        else
+            ok "${bp} already enabled"
+        fi
+        HYPR_APT_OPTS=(-t "$bp")
     fi
 
     run $SUDO apt update -qq
@@ -213,84 +198,101 @@ setup_repos() {
 # ─── Installation ────────────────────────────────────────────────────────────
 install_packages() {
     step "Installing packages"
-    info "Total packages: ${#PKGS[@]}"
 
-    # Filter out unavailable packages silently
-    INSTALLABLE=()
-    for pkg in "${PKGS[@]}"; do
-        if apt-cache show "$pkg" &>/dev/null 2>&1; then
-            INSTALLABLE+=("$pkg")
-        else
-            warn "Not available in apt: $pkg (skipping)"
-        fi
-    done
+    filter_available() {
+        local out=()
+        for pkg in "$@"; do
+            if apt-cache show "$pkg" &>/dev/null; then
+                out+=("$pkg")
+            else
+                warn "Not available in apt: $pkg (skipping)"
+            fi
+        done
+        printf '%s\n' "${out[@]}"
+    }
 
+    mapfile -t HYPR_INSTALLABLE < <(filter_available "${PKGS_HYPRLAND[@]}")
+    mapfile -t INSTALLABLE      < <(filter_available "${PKGS[@]}")
+
+    info "Hyprland packages: ${#HYPR_INSTALLABLE[@]}, other packages: ${#INSTALLABLE[@]}"
+    run $SUDO apt install -y "${HYPR_APT_OPTS[@]}" "${HYPR_INSTALLABLE[@]}"
     run $SUDO apt install -y "${INSTALLABLE[@]}"
     ok "Packages installed"
 }
 
+# ─── Fonts ───────────────────────────────────────────────────────────────────
+install_fonts() {
+    [[ "$FONTS_CHOICE" == "Yes" ]] || return 0
+    step "Installing Nerd Fonts"
+    local base="https://github.com/ryanoasis/nerd-fonts/releases/latest/download"
+    for f in CascadiaCode JetBrainsMono; do
+        if fc-list 2>/dev/null | grep -qi "${f/CascadiaCode/CaskaydiaCove} Nerd Font"; then
+            ok "$f Nerd Font already installed"
+            continue
+        fi
+        info "Downloading $f.zip..."
+        run mkdir -p "$FONTS/$f-nerd"
+        run curl -fsSL "$base/$f.zip" -o "/tmp/$f.zip"
+        run unzip -oq "/tmp/$f.zip" -d "$FONTS/$f-nerd"
+        run rm -f "/tmp/$f.zip"
+        ok "$f Nerd Font installed"
+    done
+    run fc-cache -f
+}
+
 # ─── Config Deployment ───────────────────────────────────────────────────────
+link() {  # link SRC DST — symlink, backing up anything that is already there
+    local src="$1" dst="$2" name="${3:-$(basename "$2")}"
+    if [[ -L "$dst" && "$(readlink -f "$dst")" == "$(readlink -f "$src")" ]]; then
+        ok "Already linked: $name"
+    elif [[ -e "$dst" || -L "$dst" ]]; then
+        warn "Backing up existing: $name → $name.bak"
+        run mv "$dst" "${dst}.bak"
+        run ln -s "$src" "$dst"
+        ok "Linked: $name"
+    else
+        run ln -s "$src" "$dst"
+        ok "Linked: $name"
+    fi
+}
+
 deploy_configs() {
     step "Deploying configuration files"
+    run mkdir -p "$CFG" "$BIN" "$CFG/wallpapers" "$HOME/Pictures/Wallpapers"
 
-    mkdir -p "$CFG"
-    mkdir -p "$HOME/Pictures/Wallpapers"
-    mkdir -p "$CFG/wallpapers"
-
-    # Symlink each config directory
-    local DIRS=(kitty sway themes wofi rofi scripts)
-    [[ "$WM_CHOICE" == "Hyprland" || "$WM_CHOICE" == "Both" ]] && DIRS+=(hyprland)
-
-    for d in "${DIRS[@]}"; do
-        SRC="$REPO_DIR/.config/$d"
-        DST="$CFG/$d"
-        if [[ -d "$SRC" ]]; then
-            if [[ -L "$DST" ]]; then
-                ok "Already linked: $d"
-            elif [[ -d "$DST" ]]; then
-                warn "Backing up existing: $d → $d.bak"
-                run mv "$DST" "${DST}.bak"
-                run ln -s "$SRC" "$DST"
-            else
-                run ln -s "$SRC" "$DST"
-                ok "Linked: $d"
-            fi
-        fi
+    # Config directories: everything under .config/ except wallpapers (copied below)
+    for src in "$REPO_DIR"/.config/*/; do
+        local d; d="$(basename "$src")"
+        [[ "$d" == "wallpapers" ]] && continue
+        link "${src%/}" "$CFG/$d" "$d"
     done
 
-    # Waybar lives in repo root waybar/
-    SRC="$REPO_DIR/waybar"
-    DST="$CFG/waybar"
-    if [[ -L "$DST" ]]; then
-        ok "Already linked: waybar"
-    elif [[ -d "$DST" ]]; then
-        warn "Backing up existing: waybar → waybar.bak"
-        run mv "$DST" "${DST}.bak"
-        run ln -s "$SRC" "$DST"
-    else
-        run ln -s "$SRC" "$DST"
-        ok "Linked: waybar"
-    fi
+    # Scripts
+    for src in "$REPO_DIR"/.local/bin/*; do
+        link "$src" "$BIN/$(basename "$src")" "bin/$(basename "$src")"
+    done
 
-    # Wofi styles
-    SRC="$REPO_DIR/.config/wofi"
-    DST="$CFG/wofi"
-    # (already handled above in the loop)
-
-    ok "Configs deployed"
+    # Default wallpaper is copied, not linked: wallpaper-gen writes into this dir
+    for img in "$REPO_DIR"/.config/wallpapers/*; do
+        [[ -e "$CFG/wallpapers/$(basename "$img")" ]] || run cp "$img" "$CFG/wallpapers/"
+    done
+    ok "Wallpapers copied"
 }
 
 # ─── Theme Bootstrap ─────────────────────────────────────────────────────────
 apply_theme() {
     step "Applying initial theme: $THEME_ID"
 
-    SWITCH="$CFG/themes/switch.sh"
-    if [[ -f "$SWITCH" ]]; then
-        run bash "$SWITCH" "$THEME_ID"
-        ok "Theme '$THEME_ID' applied"
-    else
-        warn "switch.sh not found, skipping theme generation"
+    # mesh-gradient wallpaper per theme, then the default wallpaper symlink
+    run python3 "$BIN/wallpaper-gen"
+    if [[ ! -e "$CFG/wallpapers/current" ]]; then
+        run ln -sfn "$CFG/wallpapers/house-garden.png" "$CFG/wallpapers/current"
     fi
+
+    # theme-apply reloads hyprland/waybar/swaync when they run; outside a
+    # session those calls just fail quietly and only the files are written
+    run python3 "$BIN/theme-apply" "$THEME_ID" --quiet
+    ok "Theme '$THEME_ID' applied"
 }
 
 # ─── Shell Profile ────────────────────────────────────────────────────────────
@@ -300,7 +302,7 @@ setup_profile() {
     PROFILE_LINE='export PATH="$HOME/.local/bin:$PATH"'
     for rc in "$HOME/.bashrc" "$HOME/.zshrc"; do
         if [[ -f "$rc" ]] && ! grep -qF "$PROFILE_LINE" "$rc"; then
-            echo "$PROFILE_LINE" >> "$rc"
+            run bash -c "echo '$PROFILE_LINE' >> '$rc'"
             ok "Updated $rc"
         fi
     done
@@ -311,24 +313,16 @@ print_summary() {
     echo -e "\n${G}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${D}"
     echo -e "${W}  Installation complete!${D}"
     echo -e "${G}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${D}\n"
-    echo -e "  ${C}Window manager:${D} $WM_CHOICE"
-    echo -e "  ${C}Terminal:       ${D} $TERM_CHOICE"
-    echo -e "  ${C}Theme:          ${D} $THEME_ID"
+    echo -e "  ${C}Theme:${D} $THEME_ID"
     echo -e ""
     echo -e "  ${W}Next steps:${D}"
-
-    if [[ "$WM_CHOICE" == "Hyprland" || "$WM_CHOICE" == "Both" ]]; then
-        echo -e "  ${Y}→${D} Log out and select 'Hyprland' in your display manager, or:"
-        echo -e "    ${C}exec Hyprland${D} from a TTY"
-    fi
-    if [[ "$WM_CHOICE" == "Sway" || "$WM_CHOICE" == "Both" ]]; then
-        echo -e "  ${Y}→${D} Type ${C}sway${D} in a TTY to start Sway"
-    fi
-
+    echo -e "  ${Y}→${D} Log out and select 'Hyprland' in your display manager, or:"
+    echo -e "    ${C}Hyprland${D} from a TTY"
     echo -e ""
-    echo -e "  ${W}To switch themes:${D}  ${C}~/.config/themes/switch.sh <theme>${D}"
-    echo -e "  ${W}Control plane:${D}     ${C}Super + Alt + Space${D}"
-    echo -e "  ${W}App launcher:${D}      ${C}Super + Space${D}"
+    echo -e "  ${W}Main menu:${D}       ${C}Super + Alt + Space${D}"
+    echo -e "  ${W}App launcher:${D}    ${C}Super + Space${D}"
+    echo -e "  ${W}Switch theme:${D}    ${C}theme-apply <id>${D}   (theme-apply --list)"
+    echo -e "  ${W}Set wallpaper:${D}   ${C}wallpaper-set <image>${D}"
     echo -e ""
 
     if $DRY_RUN; then
@@ -350,6 +344,7 @@ main() {
     build_pkg_list
     setup_repos
     install_packages
+    install_fonts
     deploy_configs
     apply_theme
     setup_profile

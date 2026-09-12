@@ -1,0 +1,4 @@
+#!/bin/sh
+# Открывает speedtest-run в плавающем окне alacritty (класс speedtest —
+# для него в hyprland.conf есть windowrule: float, размер, по центру).
+exec alacritty --class speedtest --title Speedtest -e "$HOME/.local/bin/speedtest-run"

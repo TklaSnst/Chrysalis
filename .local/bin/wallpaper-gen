@@ -1,0 +1,67 @@
+#!/usr/bin/env python3
+"""Генерирует «mesh gradient» обои в палитре каждой темы:
+   ~/.config/wallpapers/theme-<id>.png (1920x1080). Существующие не трогает,
+   если не передан --force."""
+import json
+import random
+import sys
+from pathlib import Path
+
+from PIL import Image, ImageDraw, ImageFilter
+
+HOME = Path.home()
+THEMES = HOME / ".config/themes"
+OUT = HOME / ".config/wallpapers"
+W, H = 1920, 1080
+SW, SH = 192, 108  # рисуем мелко и растягиваем — получается мягкий градиент
+
+
+def hexrgb(h):
+    h = h.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
+def mix(a, b, k):
+    return tuple(int(a[i] * (1 - k) + b[i] * k) for i in range(3))
+
+
+def make(t):
+    rnd = random.Random(t["id"])
+    bg = hexrgb(t["bg"])
+    dark = t["mode"] == "dark"
+    # фон чуть темнее/светлее базового, чтобы окна с ним не сливались
+    base = mix(bg, (0, 0, 0) if dark else (255, 255, 255), 0.25)
+    img = Image.new("RGB", (SW, SH), base)
+    d = ImageDraw.Draw(img)
+    cols = [hexrgb(t[k]) for k in ("accent", "accent2", "magenta", "cyan", "blue", "orange")]
+    rnd.shuffle(cols)
+    for i, c in enumerate(cols[:5]):
+        # пятна приглушаем к фону, чтобы обои не кричали
+        c = mix(c, base, 0.35 if dark else 0.15)
+        r = rnd.randint(28, 60)
+        x = rnd.randint(-10, SW + 10)
+        y = rnd.randint(-10, SH + 10)
+        d.ellipse((x - r, y - r, x + r, y + r), fill=c)
+    img = img.filter(ImageFilter.GaussianBlur(22))
+    img = img.resize((W, H), Image.BICUBIC)
+    # лёгкое зерно, чтобы не было полос на градиенте
+    noise = Image.effect_noise((W, H), 6).convert("L")
+    grain = Image.merge("RGB", (noise, noise, noise))
+    img = Image.blend(img, grain, 0.035 if dark else 0.02)
+    return img
+
+
+def main(argv):
+    force = "--force" in argv
+    OUT.mkdir(parents=True, exist_ok=True)
+    for p in sorted(THEMES.glob("*.json")):
+        t = json.load(open(p))
+        dst = OUT / f"theme-{t['id']}.png"
+        if dst.exists() and not force:
+            continue
+        make(t).save(dst, optimize=True)
+        print(dst)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

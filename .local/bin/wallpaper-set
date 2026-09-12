@@ -1,0 +1,63 @@
+#!/bin/sh
+# Ставит обои с анимацией: wallpaper-transition рисует круговое проявление
+# новой картинки поверх старой, под ним тем временем подменяется swaybg.
+# Обои запоминаются в ~/.config/wallpapers/current (симлинк).
+#
+#   wallpaper-set <image> [--pos top-left|top-right|bottom-left|bottom-right|center|random]
+#
+# Позицию по умолчанию можно задать в ~/.config/wallpapers/transition
+# (одно слово, например top-left). Без файла — случайный угол.
+set -u
+img="${1:?usage: wallpaper-set <image> [--pos ...]}"
+shift
+img="$(realpath "$img")"
+[ -r "$img" ] || { echo "нет файла: $img" >&2; exit 1; }
+
+dir="${XDG_CONFIG_HOME:-$HOME/.config}/wallpapers"
+bin="$HOME/.local/bin"
+mkdir -p "$dir"
+
+pos="random"
+[ -r "$dir/transition" ] && pos="$(head -n1 "$dir/transition")"
+[ "${1:-}" = "--pos" ] && pos="$2"
+
+old="$(readlink -f "$dir/current" 2>/dev/null || true)"
+oldpids="$(pgrep -x swaybg | tr '\n' ' ')"
+ln -sfn "$img" "$dir/current"
+
+wait_layer() { # ждём появления слоя с namespace $1 (до ~1.5 c)
+    i=0
+    while [ "$i" -lt 30 ]; do
+        hyprctl layers 2>/dev/null | grep -q "namespace: $1" && return 0
+        i=$((i + 1)); sleep 0.05
+    done
+    return 1
+}
+
+anim=0
+if [ -n "$old" ] && [ -r "$old" ] && [ "$old" != "$img" ]; then
+    ready="${XDG_RUNTIME_DIR:-/tmp}/wallpaper-transition.ready"
+    : > "$ready"
+    setsid -f "$bin/wallpaper-transition" "$old" "$img" --pos "$pos" > "$ready" 2>/dev/null
+    # ждём первый отрисованный кадр слоя перехода (до ~2 c)
+    i=0
+    while [ "$i" -lt 40 ]; do
+        grep -q ready "$ready" 2>/dev/null && { anim=1; break; }
+        i=$((i + 1)); sleep 0.05
+    done
+fi
+
+# новый swaybg поднимается под слоем анимации (или сразу, если анимации нет)
+setsid -f swaybg -m fill -i "$img" >/dev/null 2>&1
+wait_layer wallpaper
+sleep 0.1
+[ -n "$oldpids" ] && kill $oldpids 2>/dev/null
+
+# дожидаемся конца анимации, чтобы вызывающий скрипт мог на это рассчитывать
+if [ "$anim" = 1 ]; then
+    i=0
+    while [ "$i" -lt 100 ] && pgrep -f "bin/wallpaper-transition" >/dev/null; do
+        i=$((i + 1)); sleep 0.05
+    done
+fi
+exit 0

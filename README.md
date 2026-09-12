@@ -1,20 +1,34 @@
 # Chrysalis
 
-> A clean, minimal Wayland desktop for Debian-based systems — install Ubuntu Server, run one script, get a polished setup.
+> A clean, minimal Hyprland desktop for Debian-based systems — install Debian/Ubuntu, run one script, get a polished setup.
 
-<img width="2560" height="1440" alt="desktop preview" src="https://github.com/user-attachments/assets/a7d3aa3c-5c33-478e-9f49-20cb55e445fa" />
-<img width="2560" height="1440" alt="desktop preview 2" src="https://github.com/user-attachments/assets/8614a32b-0065-4552-8d32-9a0c4721158d" />
-<img width="2560" height="1440" alt="desktop preview 3" src="https://github.com/user-attachments/assets/95a8f61d-9d69-40cb-83b2-1c63088f9b2f" />
+![Terminal with fastfetch — Gruvbox Dark](screenshots/terminal.png)
+![Main menu — Tokyo Night](screenshots/tokyo-menu.png)
+![Theme picker](screenshots/themes.png)
+![Wallpaper picker](screenshots/wallpapers.png)
+
+<details>
+<summary>More screenshots</summary>
+
+![App launcher](screenshots/launcher.png)
+![Main menu — Gruvbox Dark](screenshots/menu.png)
+![Terminal — Tokyo Night](screenshots/tokyo-terminal.png)
+
+</details>
 
 ---
 
 ## Features
 
-- **Hyprland** and **Sway** support — choose during install
-- **Theme system** — switch between 6 themes with one command, everything updates at once (waybar, terminal, rofi, GTK)
-- **Waybar** — cava audio equalizer, music drawer, system tray, resource monitors
-- **Rofi control plane** — `Super+Alt+Space` hierarchical menu for themes, apps, system, keybindings
-- **Auto-installer** — detects your distro, asks a few questions, deploys everything
+- **Hyprland** (≥ 0.54) with blur, "liquid glass" layer popups and bounce animations
+- **Theme system** — 7 JSON palettes; `theme-apply <id>` recolors *everything* at once:
+  Hyprland borders · waybar · swaync · wofi · alacritty · kitty · GTK 3/4 · Qt/KDE (`kdeglobals`) · fastfetch · folder icons (Adwaita recolored to the accent) · `gsettings` dark/light (Firefox & Chromium follow)
+- **Contrast boost** — `theme-apply --contrast 0..1` pulls backgrounds toward black/white without touching accents
+- **Wallpapers** — mesh-gradient wallpaper generated per theme, picker with thumbnails, animated circular transition (`swww`-style grow, no swww needed)
+- **Waybar** — workspaces, mpris, hidden drawers (battery / cpu / load, memory / temp), bluetooth, volume, backlight, network, tray, swaync control center
+- **wofi menus** — glass-styled main menu (`Super+Alt+Space`): apps · theme · wallpaper · speedtest
+- **Speedtest** — LibreSpeed in a floating, theme-colored terminal
+- **Auto-installer** — detects the distro, enables backports/PPA for Hyprland, links configs, generates wallpapers, applies the theme
 
 ---
 
@@ -32,26 +46,63 @@ Use `--dry-run` to preview what will be installed without making changes:
 bash install.sh --dry-run
 ```
 
-**Supported:** Ubuntu 22.04/24.04 (Server & Desktop), Debian 12+, any `apt`-based distro.
+**Supported:** Debian 13 (trixie, Hyprland from backports), Ubuntu 24.04+ (Hyprland PPA), any `apt`-based distro that ships Hyprland ≥ 0.54.
+
+The installer **symlinks** `.config/*` and `.local/bin/*` into your home, so `git pull` updates the live config. Existing directories are backed up as `*.bak`.
 
 ---
 
 ## Themes
 
-Switch at any time — colors update everywhere simultaneously:
-
 ```bash
-~/.config/themes/switch.sh catppuccin
-~/.config/themes/switch.sh nord
-~/.config/themes/switch.sh everforest
-~/.config/themes/switch.sh gruvbox
-~/.config/themes/switch.sh tokyonight
-~/.config/themes/switch.sh kanagawa
+theme-apply --list          # id  name  mode
+theme-apply tokyo-night
+theme-apply catppuccin-latte
+theme-apply --contrast 0.3  # 0 = palette as-is, 1 = max contrast (default 0.6)
 ```
 
-Or use the control plane: `Super+Alt+Space` → **Themes**
+| id | name | mode |
+|----|------|------|
+| `catppuccin-latte` | Catppuccin Latte | light |
+| `catppuccin-mocha` | Catppuccin Mocha | dark |
+| `dracula` | Dracula | dark |
+| `gruvbox-dark` | Gruvbox Dark | dark |
+| `nord` | Nord | dark |
+| `rose-pine` | Rosé Pine | dark |
+| `tokyo-night` | Tokyo Night | dark |
 
-Each theme updates: waybar colors · terminal (kitty) · rofi · wofi · sway/hyprland borders · GTK
+Or use the menu: `Super+Alt+Space` → **Тема оформления**.
+
+### Adding a theme
+
+Drop a JSON file into `.config/themes/` — 23 keys, all hex:
+
+```json
+{
+  "id": "my-theme", "name": "My Theme", "mode": "dark",
+  "bg": "#…", "bg_alt": "#…", "surface": "#…", "surface2": "#…",
+  "fg": "#…", "fg_dim": "#…", "fg_bright": "#…",
+  "accent": "#…", "accent2": "#…",
+  "red": "#…", "orange": "#…", "yellow": "#…", "green": "#…",
+  "cyan": "#…", "blue": "#…", "magenta": "#…",
+  "black": "#…", "bright_black": "#…", "white": "#…", "bright_white": "#…"
+}
+```
+
+Then `wallpaper-gen` (creates `wallpapers/theme-my-theme.png`) and `theme-apply my-theme`.
+
+---
+
+## Wallpapers
+
+```bash
+wallpaper-set ~/Pictures/photo.png                  # animated transition, random corner
+wallpaper-set photo.png --pos center                # top-left | top-right | bottom-left | bottom-right | center | random
+wallpaper-gen [--force]                             # (re)generate mesh gradients for every theme
+```
+
+The picker (`Super+Alt+Space` → **Обои**) scans `~/.config/wallpapers` and `~/Pictures/Wallpapers`.
+A default position for the transition can be stored in `~/.config/wallpapers/transition`.
 
 ---
 
@@ -59,26 +110,29 @@ Each theme updates: waybar colors · terminal (kitty) · rofi · wofi · sway/hy
 
 | Key | Action |
 |-----|--------|
-| `Super + Return` | Terminal (kitty) |
-| `Super + Space` | App launcher (wofi) |
-| `Super + Alt + Space` | Control plane (rofi) |
-| `Super + B` | Browser |
-| `Super + E` | Editor (VS Code) |
-| `Super + F` | Files (Thunar) |
+| `Super + Return` | Terminal (alacritty) |
+| `Super + Space` | App launcher (wofi drun) |
+| `Super + Alt + Space` | Main menu (apps / theme / wallpaper / speedtest) |
+| `Super + B` | Browser (firefox) |
+| `Super + C` | VS Code |
+| `Super + V` | DaVinci Resolve |
+| `Super + P` | Screenshot area → clipboard |
+| `Print` / `Shift + Print` / `Ctrl + Print` | Screenshot area / screen / output → file |
 | `Super + Shift + Q` | Close window |
-| `Super + Shift + F` | Toggle float |
-| `Super + M` | Maximize |
-| `Super + Shift + M` | Fullscreen |
-| `Super + S` | Scratchpad |
-| `Super + R` | Resize mode |
-| `Super + K` | Color picker |
-| `Super + Shift + W` | Restart Waybar |
-| `Super + Shift + C` | Reload compositor |
-| `Print` | Screenshot area → clipboard |
-| `Shift + Print` | Screenshot area → file |
-| `Ctrl + Print` | Screenshot screen → clipboard |
-| `Super + 1–0` | Switch workspace |
-| `Super + Shift + 1–0` | Move window to workspace |
+| `Super + Shift + V` | Toggle floating |
+| `Super + Shift + F11` | Fullscreen |
+| `Super + Shift + P` | Toggle group |
+| `Super + J` | Toggle split |
+| `Super + Shift + X` | Pin window |
+| `Super + S` / `Super + Shift + S` | Scratchpad show / move to |
+| `Super + R` | Resize submap (arrows, `Esc` to leave) |
+| `Super + Arrows` / `Super + Shift + Arrows` | Focus / move window |
+| `Super + 1–0` / `Super + Shift + 1–0` | Switch / move to workspace |
+| `Super + Scroll` | Next / previous workspace |
+| `Super + Shift + C` | Reload Hyprland |
+| `Super + Shift + E` | Exit Hyprland |
+| `Caps Lock` | Toggle keyboard layout (us / ru) |
+| 3-finger swipe ←→ / ↓ (+Alt) / ↑ (+Super) | Workspace / close / fullscreen |
 
 ---
 
@@ -86,75 +140,46 @@ Each theme updates: waybar colors · terminal (kitty) · rofi · wofi · sway/hy
 
 ```
 .
-├── install.sh                    # Auto-installer
-├── hyprland.conf                 # Hyprland example config
-├── waybar/                       # Waybar config (→ ~/.config/waybar)
-│   ├── modules.jsonc             # All module definitions
-│   ├── style.css                 # Styles (@import colors/colors.css)
-│   ├── layouts/
-│   │   ├── with_music.jsonc      # Main layout (music drawer + cava)
-│   │   └── with_window.jsonc     # Alternative (window title)
-│   └── colors/
-│       └── colors.css            # Generated by theme system
-└── .config/
-    ├── hyprland/
-    │   ├── hyprland.conf         # Main config (sources theme.conf)
-    │   └── theme.conf            # Generated — colors, borders, shadows
-    ├── themes/
-    │   ├── build.py              # Template renderer
-    │   ├── switch.sh             # Theme switcher
-    │   ├── *.yaml                # Theme color palettes
-    │   └── templates/            # .tpl files for each app
-    ├── rofi/menus/               # Control plane scripts
-    │   ├── main.sh               # Entry point
-    │   ├── themes.sh
-    │   ├── system.sh             # Lock / suspend / logout / reboot
-    │   ├── keybindings.sh
-    │   ├── language.sh
-    │   └── wallpaper.sh
-    ├── scripts/
-    │   └── cava-waybar.sh        # Cava → waybar JSON bridge
-    ├── kitty/                    # Terminal config
-    ├── sway/                     # Sway config
-    └── wofi/                     # Launcher config
+├── install.sh
+├── screenshots/
+├── .config/
+│   ├── hypr/hyprland.conf        # sources theme.conf (generated)
+│   ├── waybar/                   # config.jsonc → layouts/with_music.jsonc + modules.jsonc
+│   ├── wofi/                     # style.css (glass), style-wallpaper.css, per-menu configs
+│   ├── swaync/                   # notification center
+│   ├── alacritty/                # alacritty.toml + binds.toml (theme.toml generated)
+│   ├── kitty/kitty.conf          # includes theme.conf (generated)
+│   ├── fastfetch/logo.txt        # config.jsonc is generated
+│   ├── rofi/                     # rofi drun launcher used by the waybar start button
+│   ├── themes/*.json             # color palettes
+│   └── wallpapers/               # default wallpaper; theme-*.png generated here
+└── .local/bin/
+    ├── theme-apply               # the theme engine (python, no deps beyond stdlib + GTK)
+    ├── wofi-main-menu            # Super+Alt+Space
+    ├── wofi-theme                # theme picker with palette swatches
+    ├── wofi-wallpaper            # wallpaper grid with thumbnails
+    ├── wallpaper-gen             # mesh gradient per theme (Pillow)
+    ├── wallpaper-set             # set wallpaper with transition
+    ├── wallpaper-transition      # GTK layer-shell circular reveal
+    ├── speedtest-menu / -run     # LibreSpeed in a floating alacritty
+    └── waybar-autostart          # retry wrapper for waybar at session start
 ```
-
----
-
-## Waybar
-
-The bar is split into three areas:
-
-**Left** — logo button · app launcher · hidden drawer (battery / cpu / load) · workspaces · music drawer
-
-**Center** — clock with calendar tooltip
-
-**Right** — cava equalizer · bluetooth · volume · backlight · network · tray · hidden drawer (memory / temp / power profile) · power button
-
-### Music drawer
-Click the `󰝚` icon to expand: **⏮ Artist — Title ⏭**. Click the icon again to collapse.
-
-### Cava equalizer
-Reads live audio output and displays `▁▂▃▄▅▆▇█` bars in real time. Requires `cava`.
-
-### Logo button
-Currently shows `󰣇`. Replace with your own image by adding `~/.config/waybar/logo.png`.
 
 ---
 
 ## How the theme system works
 
 ```
-theme.yaml  ──►  build.py  ──►  *.tpl templates  ──►  app config files
-                     │
-                     └──►  gsettings (GTK theme)
+themes/<id>.json ──► theme-apply ──► hypr/theme.conf, waybar/colors/colors.css,
+                        │            swaync/colors/colors.css, wofi/colors.css,
+                        │            alacritty/theme.toml, kitty/theme.conf,
+                        │            gtk-3.0/gtk.css, gtk-4.0/gtk.css, kdeglobals,
+                        │            fastfetch/config.jsonc, icons/ThemeAccent
+                        └──► gsettings color-scheme / gtk-theme / icon-theme
+                             hyprctl reload · waybar restart · swaync reload · kitty SIGUSR1
 ```
 
-1. `switch.sh <name>` sets `current.yaml` symlink → runs `build.py`
-2. `build.py` reads each `.tpl` file, substitutes `${variable}` with theme colors, writes output
-3. The compositor and waybar are reloaded automatically
-
-To add support for a new application: create a `.tpl` file in `.config/themes/templates/` and add the output path to `TARGETS` in `build.py`.
+Every target is a small function in `theme-apply`; to support a new app add one that writes its file and append it to the tuple in `main()`. Generated files carry a header and are git-ignored.
 
 ---
 
@@ -164,15 +189,17 @@ Installed automatically by `install.sh`:
 
 | Package | Purpose |
 |---------|---------|
-| `hyprland` / `sway` | Window manager |
+| `hyprland` ≥ 0.54, `xdg-desktop-portal-hyprland/-gtk` | Compositor & portals |
 | `waybar` | Status bar |
-| `rofi` | Launcher & control plane |
-| `wofi` | App launcher |
-| `cava` | Audio visualizer |
-| `kitty` | Terminal |
-| `grim` + `slurp` | Screenshots |
+| `wofi` | Launcher & menus |
+| `rofi` | drun launcher for the waybar start button |
+| `sway-notification-center` | Notifications / control center |
 | `swaybg` | Wallpaper |
-| `playerctl` | Media controls |
-| `python3-yaml` | Theme system |
+| `alacritty` (`kitty` optional) | Terminal |
+| `fastfetch`, `librespeed-cli` | Shown from the terminal / menu |
+| `grim` + `slurp` + `grimshot` + `wl-clipboard` | Screenshots |
+| `playerctl`, `brightnessctl`, `pulseaudio-utils` | Media / hardware keys |
 | `pipewire` + `wireplumber` | Audio |
-| `dunst` | Notifications |
+| `network-manager-gnome`, `blueman` | Applets |
+| `python3-pil`, `python3-gi`, `gir1.2-gtklayershell-0.1` | Theme engine, thumbnails, wallpaper transition |
+| Nerd Fonts (CaskaydiaCove, JetBrainsMono) | Icons in waybar / wofi / swaync (downloaded on request) |

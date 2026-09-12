@@ -1,0 +1,25 @@
+#!/bin/sh
+# Автозапуск waybar с повторами: при старте сессии waybar иногда падает
+# в первые секунды (гонка с готовностью dbus/portal/wayland).
+LOG="${XDG_CACHE_HOME:-$HOME/.cache}/waybar-autostart.log"
+mkdir -p "$(dirname "$LOG")"
+: > "$LOG"
+
+i=0
+while [ "$i" -lt 10 ]; do
+    i=$((i + 1))
+    if pgrep -x waybar >/dev/null 2>&1; then
+        echo "=== $(date -Is): waybar уже запущен, выходим ===" >> "$LOG"
+        exit 0
+    fi
+    echo "=== $(date -Is): попытка $i ===" >> "$LOG"
+    start=$(date +%s)
+    stdbuf -oL -eL waybar >> "$LOG" 2>&1
+    rc=$?
+    end=$(date +%s)
+    echo "=== $(date -Is): waybar завершился rc=$rc, работал $((end - start)) c ===" >> "$LOG"
+    # Проработал долго -> это был осознанный выход/убийство, не перезапускаем
+    [ $((end - start)) -ge 60 ] && exit 0
+    sleep 2
+done
+echo "=== $(date -Is): сдаюсь после $i попыток ===" >> "$LOG"

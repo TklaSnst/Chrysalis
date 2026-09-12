@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+"""Анимированный переход между обоями (аналог swww --transition-type grow).
+
+    wallpaper-transition <old> <new> [--pos top-left|top-right|bottom-left|
+                         bottom-right|center|random] [--duration 1.1] [--edge 60]
+
+Рисует слой (layer-shell, bottom), где новая картинка
+проявляется расширяющимся кругом из выбранной точки с мягким краем.
+После окончания просто выходит — под слоем к этому моменту уже должен
+стоять swaybg с новой картинкой (этим занимается wallpaper-set).
+"""
+import math
+import random
+import sys
+
+import gi
+
+gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
+gi.require_version("GtkLayerShell", "0.1")
+gi.require_version("GdkPixbuf", "2.0")
+import cairo  # noqa: E402
+from gi.repository import Gdk, GdkPixbuf, GLib, Gtk, GtkLayerShell  # noqa: E402
+
+POSITIONS = ("top-left", "top-right", "bottom-left", "bottom-right", "center")
+
+
+def parse(argv):
+    opts = {"pos": "random", "duration": 1.1, "edge": 60.0}
+    files = []
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--pos":
+            opts["pos"] = argv[i + 1]; i += 2
+        elif a == "--duration":
+            opts["duration"] = float(argv[i + 1]); i += 2
+        elif a == "--edge":
+            opts["edge"] = float(argv[i + 1]); i += 2
+        else:
+            files.append(a); i += 1
+    if len(files) != 2:
+        sys.exit(__doc__)
+    if opts["pos"] == "random":
+        opts["pos"] = random.choice(POSITIONS[:4])
+    return files[0], files[1], opts
+
+
+def load_fill(path, w, h):
+    """Картинка, вписанная как swaybg -m fill (обрезка по центру)."""
+    pb = GdkPixbuf.Pixbuf.new_from_file(path)
+    scale = max(w / pb.get_width(), h / pb.get_height())
+    sw, sh = math.ceil(pb.get_width() * scale), math.ceil(pb.get_height() * scale)
+    pb = pb.scale_simple(sw, sh, GdkPixbuf.InterpType.BILINEAR)
+    surf = cairo.ImageSurface(cairo.FORMAT_RGB24, w, h)
+    cr = cairo.Context(surf)
+    Gdk.cairo_set_source_pixbuf(cr, pb, (w - sw) / 2, (h - sh) / 2)
+    cr.paint()
+    return surf
+
+
+class Transition(Gtk.Window):
+    def __init__(self, old, new, opts):
+        super().__init__()
+        self.old_path, self.new_path, self.opts = old, new, opts
+        self.old = self.new = None
+        self.start = None
+        self.progress = 0.0
+        self.ready = False
+
+        GtkLayerShell.init_for_window(self)
+        GtkLayerShell.set_namespace(self, "wallpaper-transition")
+        # BOTTOM, а не BACKGROUND: так слой гарантированно выше обоих swaybg
+        # независимо от порядка их появления, но ниже окон
+        GtkLayerShell.set_layer(self, GtkLayerShell.Layer.BOTTOM)
+        GtkLayerShell.set_exclusive_zone(self, -1)
+        for edge in (GtkLayerShell.Edge.TOP, GtkLayerShell.Edge.BOTTOM,
+                     GtkLayerShell.Edge.LEFT, GtkLayerShell.Edge.RIGHT):
+            GtkLayerShell.set_anchor(self, edge, True)
+
+        # прозрачный визуал: пока не нарисовали первый кадр, виден старый swaybg
+        screen = self.get_screen()
+        visual = screen.get_rgba_visual()
+        if visual is not None:
+            self.set_visual(visual)
+        self.set_app_paintable(True)
+
+        self.area = Gtk.DrawingArea()
+        self.area.connect("draw", self.on_draw)
+        self.add(self.area)
+        self.connect("map", lambda *_: self.area.add_tick_callback(self.on_tick))
+
+    def ensure_images(self, w, h):
+        if self.old is None:
+            self.old = load_fill(self.old_path, w, h)
+            self.new = load_fill(self.new_path, w, h)
+
+    def on_tick(self, widget, clock):
+        t = clock.get_frame_time() / 1e6
+        if self.start is None:
+            self.start = t
+        x = min(1.0, (t - self.start) / self.opts["duration"])
+        self.progress = 1 - (1 - x) ** 3  # ease-out cubic
+        widget.queue_draw()
+        if x >= 1.0:
+            GLib.timeout_add(40, Gtk.main_quit)
+            return GLib.SOURCE_REMOVE
+        return GLib.SOURCE_CONTINUE
+
+    def on_draw(self, widget, cr):
+        w, h = widget.get_allocated_width(), widget.get_allocated_height()
+        self.ensure_images(w, h)
+        cr.set_source_surface(self.old, 0, 0)
+        cr.paint()
+
+        pos = self.opts["pos"]
+        cx = w / 2 if pos == "center" else (0 if "left" in pos else w)
+        cy = h / 2 if pos == "center" else (0 if "top" in pos else h)
+        rmax = math.hypot(max(cx, w - cx), max(cy, h - cy)) + self.opts["edge"]
+        r = rmax * self.progress
+        edge = self.opts["edge"]
+
+        cr.set_source_surface(self.new, 0, 0)
+        if r <= edge:
+            mask = cairo.RadialGradient(cx, cy, 0, cx, cy, max(r, 1))
+        else:
+            mask = cairo.RadialGradient(cx, cy, r - edge, cx, cy, r)
+        mask.add_color_stop_rgba(0, 0, 0, 0, 1)
+        mask.add_color_stop_rgba(1, 0, 0, 0, 0)
+        cr.mask(mask)
+        if not self.ready:
+            # первый полный кадр отрисован — wallpaper-set может менять swaybg
+            self.ready = True
+            GLib.idle_add(lambda: print("ready", flush=True) and False)
+        return True
+
+
+def main():
+    old, new, opts = parse(sys.argv[1:])
+    win = Transition(old, new, opts)
+    win.show_all()
+    Gtk.main()
+
+
+if __name__ == "__main__":
+    main()

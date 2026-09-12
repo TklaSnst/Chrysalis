@@ -1,0 +1,19 @@
+#!/bin/sh
+# Главное системное меню (Super+Alt+Space). Пункты ведут в другие меню wofi.
+cfg="${XDG_CONFIG_HOME:-$HOME/.config}/wofi"
+bin="$HOME/.local/bin"
+
+n="$(printf '%s\n' \
+    "󰀻   Приложения" \
+    "󰏘   Тема оформления" \
+    "󰸉   Обои" \
+    "󰓅   Speedtest" \
+    | wofi --dmenu --conf "$cfg/main" --style "$cfg/style.css" --prompt "Меню" \
+           --define dmenu-print_line_num=true)"
+
+case "$n" in
+    0) exec wofi --show drun ;;
+    1) exec "$bin/wofi-theme" ;;
+    2) exec "$bin/wofi-wallpaper" ;;
+    3) exec "$bin/speedtest-menu" ;;
+esac
