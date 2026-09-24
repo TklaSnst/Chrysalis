@@ -134,6 +134,8 @@ PKGS_BASE=(
     alacritty fastfetch librespeed-cli
     # screenshots, clipboard, media & hardware keys
     grim slurp grimshot wl-clipboard playerctl brightnessctl
+    # window tabs helper (hypr-new-tab)
+    jq socat
     # audio
     pipewire pipewire-pulse wireplumber pulseaudio-utils
     # network / bluetooth applets used by waybar

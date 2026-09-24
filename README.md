@@ -26,6 +26,7 @@
 - **Contrast boost** — `theme-apply --contrast 0..1` pulls backgrounds toward black/white without touching accents
 - **Wallpapers** — mesh-gradient wallpaper generated per theme, picker with thumbnails, animated circular transition (`swww`-style grow, no swww needed)
 - **Waybar** — workspaces, mpris, hidden drawers (battery / cpu / load, memory / temp), bluetooth, volume, backlight, network, tray, swaync control center
+- **Window tabs** — Hyprland groups with a themed tab bar; split stays a split, new tabs only on demand (`hypr-new-tab`)
 - **wofi menus** — glass-styled main menu (`Super+Alt+Space`): apps · theme · wallpaper · speedtest
 - **Speedtest** — LibreSpeed in a floating, theme-colored terminal
 - **Auto-installer** — detects the distro, enables backports/PPA for Hyprland, links configs, generates wallpapers, applies the theme
@@ -121,7 +122,15 @@ A default position for the transition can be stored in `~/.config/wallpapers/tra
 | `Super + Shift + Q` | Close window |
 | `Super + Shift + V` | Toggle floating |
 | `Super + Shift + F11` | Fullscreen |
-| `Super + Shift + P` | Toggle group |
+| `Super + T` / `Super + Shift + P` | Toggle group (window tabs) |
+| `Super + Shift + T` | Move tab out of group |
+| `Super + Ctrl + T` | Lock / unlock group |
+| `Super + Tab` / `Super + Shift + Tab` | Next / previous tab |
+| `Super + Ctrl + 1–9` | Jump to tab N |
+| `Super + Ctrl + Shift + ←/→` | Reorder tab |
+| `Super + Alt + Arrows` | Move window into neighbouring group / split |
+| `Super + Shift + Return` / `+ B` / `+ Space` | New tab: terminal / firefox / any app (wofi) |
+| `Super + LMB` / `Super + RMB` | Drag (drop on tab bar to merge) / resize window |
 | `Super + J` | Toggle split |
 | `Super + Shift + X` | Pin window |
 | `Super + S` / `Super + Shift + S` | Scratchpad show / move to |
@@ -162,6 +171,7 @@ A default position for the transition can be stored in `~/.config/wallpapers/tra
     ├── wallpaper-set             # set wallpaper with transition
     ├── wallpaper-transition      # GTK layer-shell circular reveal
     ├── speedtest-menu / -run     # LibreSpeed in a floating alacritty
+    ├── hypr-new-tab              # open an app as a new tab in the current group
     └── waybar-autostart          # retry wrapper for waybar at session start
 ```
 
@@ -198,6 +208,7 @@ Installed automatically by `install.sh`:
 | `alacritty` (`kitty` optional) | Terminal |
 | `fastfetch`, `librespeed-cli` | Shown from the terminal / menu |
 | `grim` + `slurp` + `grimshot` + `wl-clipboard` | Screenshots |
+| `jq`, `socat` | `hypr-new-tab` (open app as a tab) |
 | `playerctl`, `brightnessctl`, `pulseaudio-utils` | Media / hardware keys |
 | `pipewire` + `wireplumber` | Audio |
 | `network-manager-gnome`, `blueman` | Applets |

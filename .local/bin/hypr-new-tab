@@ -1,0 +1,59 @@
+#!/bin/sh
+# Открыть приложение новой вкладкой в текущей группе окон (аналог Ctrl+T в браузере).
+#
+#   hypr-new-tab                 — терминал
+#   hypr-new-tab firefox         — конкретная команда
+#   hypr-new-tab -m | --menu     — выбрать приложение через wofi (drun)
+#
+# Пока запускается приложение, включён group:auto_group; как только окно
+# появилось (или истёк таймаут) — настройка возвращается в прежнее состояние.
+
+menu=0
+case "$1" in
+    -m|--menu) menu=1; wait_timeout=30 ;;
+    *)         cmd="$*"; [ -n "$cmd" ] || cmd="alacritty"; wait_timeout=8 ;;
+esac
+
+sock="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock"
+prev=$(hyprctl getoption group:auto_group -j | jq -r '.int')
+
+restore() { hyprctl keyword group:auto_group "$prev" >/dev/null 2>&1; }
+trap restore EXIT INT TERM
+
+# Слушателя события окна запускаем ДО старта приложения, иначе можно его проспать
+waiter=""
+if [ -S "$sock" ]; then
+    timeout "$wait_timeout" socat -U - "UNIX-CONNECT:$sock" 2>/dev/null | grep -q -m1 '^openwindow>>' &
+    waiter=$!
+fi
+
+hyprctl keyword group:auto_group true >/dev/null
+
+# Если сфокусировано обычное тайловое окно (не группа) — сначала делаем из него
+# группу, иначе новому окну просто некуда стать вкладкой и оно откроется плиткой.
+aw=$(hyprctl activewindow -j 2>/dev/null)
+if [ -n "$aw" ] && printf '%s' "$aw" | jq -e '.floating == false and (.grouped | length) == 0' >/dev/null 2>&1; then
+    hyprctl dispatch togglegroup >/dev/null
+fi
+
+if [ "$menu" = 1 ]; then
+    # print_command — опция режима drun, поэтому с префиксом "drun-".
+    # Если версия wofi её не поддержит, приложение запустится самим wofi —
+    # auto_group уже включён, так что вкладкой оно станет в любом случае.
+    cmd=$(wofi --show drun --define drun-print_command=true | sed 's/ %[a-zA-Z]//g')
+    if [ -n "$cmd" ]; then
+        hyprctl dispatch exec "$cmd" >/dev/null
+    else
+        # меню закрыли без выбора — ждать нечего
+        [ -n "$waiter" ] && kill "$waiter" 2>/dev/null
+        exit 0
+    fi
+else
+    hyprctl dispatch exec "$cmd" >/dev/null
+fi
+
+if [ -n "$waiter" ]; then
+    wait "$waiter"
+else
+    sleep 2
+fi
