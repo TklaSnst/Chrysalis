@@ -1,6 +1,6 @@
 /* Сетка обоев: то же «жидкое стекло», что и в style.css, но плитки —
    миниатюры (подпись нарисована прямо на картинке). */
-@import url("colors.css");
+@import url("/home/knm/.config/wofi/colors.css");
 
 * {
     all: unset;
@@ -71,10 +71,12 @@ window {
 }
 #entry image { border-radius: 18px; }
 /* подпись уже на миниатюре — текст оставляем только для поиска */
+/* даже при 1px длинное имя файла растягивает плитку (и wofi уходит в
+   2 колонки), поэтому отрицательным отступом ширину подписи обнуляем */
 #entry #text, #entry label {
     font-size: 1px;
     color: transparent;
-    margin: 0;
+    margin: 0 -1000px 0 0;
     padding: 0;
 }
 #entry:selected {

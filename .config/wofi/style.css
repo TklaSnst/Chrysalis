@@ -1,5 +1,5 @@
 /* Цвета берутся из colors.css — его генерирует theme-apply */
-@import url("colors.css");
+@import url("/home/knm/.config/wofi/colors.css");
 
 * {
     all: unset;

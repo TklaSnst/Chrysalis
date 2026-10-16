@@ -163,6 +163,17 @@ def wofi(t):
 @define-color glass-lo  {t['fg'] if light else t['bg']};
 """
     write(CFG / "wofi/colors.css", css)
+    # wofi грузит стиль как строку, и относительный @import ищется от
+    # текущей папки (обычно ~), а не от style.css — тогда цвета не
+    # определены, фон не рисуется и стекла нет. Пишем абсолютный путь.
+    imp = f'@import url("{CFG / "wofi/colors.css"}");'
+    for name in ("style.css", "style-wallpaper.css"):
+        f = CFG / "wofi" / name
+        if f.exists():
+            s = f.read_text()
+            s2 = re.sub(r'^@import url\("[^"]*colors\.css"\);', imp, s, count=1, flags=re.M)
+            if s2 != s:
+                f.write_text(s2)
 
 
 def alacritty(t):
@@ -462,6 +473,10 @@ DecorationHover={','.join(map(str, hexrgb(t['accent'])))}
 
 
 def reload_apps():
+    # Вне сессии Hyprland (инсталлятор, TTY, другой DE) только пишем файлы:
+    # иначе waybar поднялся бы поверх чужого рабочего стола
+    if not os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+        return
     subprocess.run(["hyprctl", "reload"], check=False, capture_output=True)
     # SIGUSR2 (перечитать CSS) у этого waybar роняет его в segfault на tray,
     # поэтому перезапускаем целиком через обёртку с повторами

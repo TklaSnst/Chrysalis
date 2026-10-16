@@ -125,6 +125,7 @@ PKGS_HYPRLAND=(
     xdg-desktop-portal-hyprland
     xdg-desktop-portal-gtk
     qt6-wayland
+    hyprpolkitagent
 )
 
 PKGS_BASE=(
@@ -148,7 +149,7 @@ PKGS_BASE=(
     # fonts
     fonts-jetbrains-mono fonts-noto fonts-noto-color-emoji
     # misc
-    polkitd xdg-utils xdg-user-dirs curl unzip
+    polkitd polkit-gnome xdg-utils xdg-user-dirs curl unzip
 )
 
 PKGS_EXTRAS=(
@@ -175,9 +176,10 @@ setup_repos() {
     step "Setting up package repositories"
 
     if [[ "$OS_ID" == "ubuntu" || "$OS_ID_LIKE" == *ubuntu* ]]; then
-        if ! grep -rq "hyprland" /etc/apt/sources.list.d/ 2>/dev/null; then
+        # Ubuntu ships Hyprland < 0.54; the maintained PPA is ppa:cppiber/hyprland
+        if ! grep -rq "cppiber" /etc/apt/sources.list.d/ 2>/dev/null; then
             info "Adding Hyprland PPA..."
-            run $SUDO add-apt-repository -y ppa:hyprland-contrib/hyprland || true
+            run $SUDO add-apt-repository -y ppa:cppiber/hyprland || true
         else
             ok "Hyprland PPA already present"
         fi

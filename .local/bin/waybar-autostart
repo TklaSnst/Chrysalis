@@ -5,6 +5,21 @@ LOG="${XDG_CACHE_HOME:-$HOME/.cache}/waybar-autostart.log"
 mkdir -p "$(dirname "$LOG")"
 : > "$LOG"
 
+# На машинах без подсветки (десктоп) модуль backlight отключается, и drawer
+# group/group-backlight, где он первый, роняет waybar в segfault. Тогда
+# собираем копию layout без этой группы и запускаем waybar с ней.
+WB_ARGS=""
+wb="${XDG_CONFIG_HOME:-$HOME/.config}/waybar"
+if [ -z "$(ls -A /sys/class/backlight 2>/dev/null)" ]; then
+    layout=$(sed -n 's/.*"include": *\[ *"\([^"]*\)".*/\1/p' "$wb/config.jsonc" | head -n1)
+    layout=$(printf '%s' "$layout" | sed "s|^~|$HOME|")
+    if [ -r "$layout" ]; then
+        gen="${XDG_RUNTIME_DIR:-/tmp}/waybar-config.jsonc"
+        sed -e 's/"group\/group-backlight", *//' -e "s|\"~/|\"$HOME/|g" "$layout" > "$gen"
+        WB_ARGS="-c $gen -s $wb/style.css"
+    fi
+fi
+
 i=0
 while [ "$i" -lt 10 ]; do
     i=$((i + 1))
@@ -14,7 +29,7 @@ while [ "$i" -lt 10 ]; do
     fi
     echo "=== $(date -Is): попытка $i ===" >> "$LOG"
     start=$(date +%s)
-    stdbuf -oL -eL waybar >> "$LOG" 2>&1
+    stdbuf -oL -eL waybar $WB_ARGS >> "$LOG" 2>&1
     rc=$?
     end=$(date +%s)
     echo "=== $(date -Is): waybar завершился rc=$rc, работал $((end - start)) c ===" >> "$LOG"

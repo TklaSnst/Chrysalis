@@ -1,0 +1,8 @@
+#!/bin/sh
+# Вкл/выкл Bluetooth по клику на модуль waybar.
+if bluetoothctl show 2>/dev/null | grep -q 'Powered: yes'; then
+    bluetoothctl power off
+else
+    rfkill unblock bluetooth 2>/dev/null
+    bluetoothctl power on
+fi

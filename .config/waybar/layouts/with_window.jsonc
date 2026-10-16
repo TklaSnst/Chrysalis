@@ -1,9 +1,8 @@
 {
     "layer": "top",
     "position": "top",
-    "width": 1910,
     "height": 25,
-    "margin": "5 0",
+    "margin": "5 5",
 
     "group/left" : {
         "orientation": "horizontal",
