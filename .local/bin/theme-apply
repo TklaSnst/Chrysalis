@@ -103,6 +103,9 @@ def hypr(t):
     for k in ("bg", "bg_alt", "surface", "surface2", "fg", "fg_dim", "fg_bright",
               "accent", "accent2", "red", "orange", "yellow", "green", "cyan", "blue", "magenta"):
         lines.append(f"${k} = rgb({t[k].lstrip('#')})")
+    # полупрозрачные фоны — для «стеклянных» элементов hyprlock
+    for k in ("bg", "surface"):
+        lines.append(f"${k}_glass = rgba({t[k].lstrip('#')}b3)")
     write(CFG / "hypr/theme.conf", "\n".join(lines) + "\n")
 
 

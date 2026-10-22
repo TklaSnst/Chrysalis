@@ -137,6 +137,8 @@ PKGS_BASE=(
     grim slurp grimshot wl-clipboard playerctl brightnessctl
     # window tabs helper (hypr-new-tab)
     jq socat
+    # lock screen & idle
+    hyprlock hypridle
     # audio
     pipewire pipewire-pulse wireplumber pulseaudio-utils
     # network / bluetooth applets used by waybar

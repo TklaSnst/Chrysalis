@@ -27,6 +27,7 @@
 - **Wallpapers** — mesh-gradient wallpaper generated per theme, picker with thumbnails, animated circular transition (`swww`-style grow, no swww needed)
 - **Waybar** — workspaces, mpris, hidden drawers (battery / cpu / load, memory / temp), bluetooth, volume, backlight, network, tray, swaync control center
 - **Workspace overview** — `Super+Tab` shows every occupied workspace as a themed glass grid with thumbnails; pick one with mouse or keys, drag windows between workspaces
+- **Lock screen & idle** — `hyprlock` over a blurred screenshot in theme colors (`Super+L`); `hypridle` locks after 10 min, turns screens off after 11
 - **Window tabs** — Hyprland groups with a themed tab bar; split stays a split, new tabs only on demand (`hypr-new-tab`)
 - **wofi menus** — glass-styled main menu (`Super+Alt+Space`): apps · theme · wallpaper · speedtest
 - **Speedtest** — LibreSpeed in a floating, theme-colored terminal
@@ -142,6 +143,7 @@ A default position for the transition can be stored in `~/.config/wallpapers/tra
 | `Super + Scroll` | Next / previous workspace |
 | `Super + Shift + C` | Reload Hyprland |
 | `Super + Shift + E` | Exit Hyprland |
+| `Super + L` | Lock screen |
 | `Caps Lock` | Toggle keyboard layout (us / ru) |
 | 3-finger swipe ←→ / ↓ (+Alt) / ↑ (+Super) | Workspace / close / fullscreen |
 
@@ -155,6 +157,8 @@ A default position for the transition can be stored in `~/.config/wallpapers/tra
 ├── screenshots/
 ├── .config/
 │   ├── hypr/hyprland.conf        # sources theme.conf (generated)
+│   ├── hypr/hyprlock.conf        # lock screen, colors from theme.conf
+│   ├── hypr/hypridle.conf        # idle timeouts: dim → lock → dpms off
 │   ├── waybar/                   # config.jsonc → layouts/with_music.jsonc + modules.jsonc
 │   ├── wofi/                     # style.css (glass), style-wallpaper.css, per-menu configs
 │   ├── swaync/                   # notification center
@@ -213,6 +217,7 @@ Installed automatically by `install.sh`:
 | `fastfetch`, `librespeed-cli` | Shown from the terminal / menu |
 | `grim` + `slurp` + `grimshot` + `wl-clipboard` | Screenshots |
 | `jq`, `socat` | `hypr-new-tab` (open app as a tab) |
+| `hyprlock`, `hypridle` | Lock screen, idle timeouts |
 | `playerctl`, `brightnessctl`, `pulseaudio-utils` | Media / hardware keys |
 | `pipewire` + `wireplumber` | Audio |
 | `network-manager-gnome`, `blueman` | Applets |
