@@ -1,0 +1,50 @@
+#!/bin/sh
+# Скриншоты: сохраняет в ~/Pictures/Screenshots, копирует в буфер обмена
+# и показывает уведомление с превью и кнопками «Изменить» (swappy) / «Папка».
+#
+#   screenshot area      — выделить область (slurp)
+#   screenshot output    — текущий монитор
+#   screenshot screen    — все мониторы
+#   screenshot edit      — область сразу в редактор swappy
+
+mode="${1:-area}"
+dir="$(xdg-user-dir PICTURES 2>/dev/null || echo "$HOME/Pictures")/Screenshots"
+file="$dir/$(date +%Y-%m-%d_%H-%M-%S).png"
+mkdir -p "$dir"
+
+# рамка выделения в цветах темы (wofi/colors.css пишет theme-apply)
+color() {
+    sed -n "s/^@define-color $1 *#\([0-9a-fA-F]\{6\}\);.*/\1/p" \
+        "${XDG_CONFIG_HOME:-$HOME/.config}/wofi/colors.css" 2>/dev/null
+}
+accent="$(color accent)"; base="$(color base)"
+select_area() {
+    slurp -d -w 2 -c "${accent:-88c0d0}ff" -b "${base:-000000}66" -s 00000000
+}
+
+case "$mode" in
+    area|edit)
+        geom="$(select_area)" || exit 0   # Esc в slurp — ничего не делаем
+        grim -g "$geom" "$file" ;;
+    output)
+        mon="$(hyprctl monitors -j | jq -r '.[] | select(.focused) | .name')"
+        grim -o "$mon" "$file" ;;
+    screen)
+        grim "$file" ;;
+    *)
+        sed -n '2,9s/^# \{0,1\}//p' "$0"; exit 1 ;;
+esac || exit 1
+
+if [ "$mode" = edit ]; then
+    exec swappy -f "$file"
+fi
+
+wl-copy --type image/png < "$file"
+
+action="$("$HOME/.local/bin/notify-action" -a "Скриншот" -i "$file" \
+    -A edit="Изменить" -A folder="Папка" \
+    "Скриншот сохранён" "$(basename "$file") · скопирован в буфер")"
+case "$action" in
+    edit)   exec swappy -f "$file" ;;
+    folder) exec xdg-open "$dir" ;;
+esac

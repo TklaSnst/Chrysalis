@@ -134,7 +134,7 @@ PKGS_BASE=(
     # terminal & tools shown in the menus
     alacritty fastfetch librespeed-cli
     # screenshots, clipboard, media & hardware keys
-    grim slurp grimshot wl-clipboard playerctl brightnessctl
+    grim slurp swappy wl-clipboard playerctl brightnessctl
     # window tabs helper (hypr-new-tab)
     jq socat
     # lock screen & idle
@@ -149,7 +149,7 @@ PKGS_BASE=(
     network-manager network-manager-gnome blueman
     # theme system & wallpaper transition (python + GTK layer-shell)
     python3 python3-pil python3-gi python3-gi-cairo
-    gir1.2-gtk-3.0 gir1.2-gtklayershell-0.1 libnotify-bin
+    gir1.2-gtk-3.0 gir1.2-gtklayershell-0.1 libnotify-bin gir1.2-notify-0.7
     # GTK/icon theming targets of theme-apply
     adwaita-icon-theme libgtk-3-bin libglib2.0-bin dconf-cli
     # fonts

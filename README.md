@@ -30,6 +30,7 @@
 - **Lock screen & idle** — `hyprlock` over a blurred screenshot in theme colors (`Super+L`); `hypridle` locks after 10 min, turns screens off after 11
 - **Clipboard history** — `cliphist` keeps text and images; `Super+Ctrl+V` opens it in wofi
 - **Volume / brightness OSD** — `swayosd` pill in theme colors on the media and brightness keys
+- **Screenshots** — area / monitor / all screens saved to `~/Pictures/Screenshots` and copied; the notification has *Edit* (swappy annotations) and *Folder* buttons
 - **Window tabs** — Hyprland groups with a themed tab bar; split stays a split, new tabs only on demand (`hypr-new-tab`)
 - **wofi menus** — glass-styled main menu (`Super+Alt+Space`): apps · theme · wallpaper · speedtest · clipboard · power (lock / suspend / log out / reboot / power off, with confirmation)
 - **Speedtest** — LibreSpeed in a floating, theme-colored terminal
@@ -121,8 +122,9 @@ A default position for the transition can be stored in `~/.config/wallpapers/tra
 | `Super + B` | Browser (firefox) |
 | `Super + C` | VS Code |
 | `Super + V` | DaVinci Resolve |
-| `Super + P` | Screenshot area → clipboard |
-| `Print` / `Shift + Print` / `Ctrl + Print` | Screenshot area / screen / output → file |
+| `Super + P` | Screenshot area → file + clipboard |
+| `Print` / `Shift + Print` / `Ctrl + Print` | Screenshot area / all screens / monitor → file + clipboard |
+| `Alt + Print` / `Super + Ctrl + P` | Area straight into the swappy editor |
 | `Super + Shift + Q` | Close window |
 | `Super + Shift + V` | Toggle floating |
 | `Super + Shift + F11` | Fullscreen |
@@ -168,6 +170,7 @@ A default position for the transition can be stored in `~/.config/wallpapers/tra
 │   ├── alacritty/                # alacritty.toml + binds.toml (theme.toml generated)
 │   ├── kitty/kitty.conf          # includes theme.conf (generated)
 │   ├── fastfetch/logo.txt        # config.jsonc is generated
+│   ├── swappy/config             # screenshot editor: save dir, font
 │   ├── rofi/                     # rofi drun launcher used by the waybar start button
 │   ├── themes/*.json             # color palettes
 │   └── wallpapers/               # default wallpaper; theme-*.png generated here
@@ -178,6 +181,8 @@ A default position for the transition can be stored in `~/.config/wallpapers/tra
     ├── wofi-wallpaper            # wallpaper grid with thumbnails
     ├── wofi-power                # power menu (Super+Shift+E)
     ├── wofi-clipboard            # clipboard history (Super+Ctrl+V)
+    ├── screenshot                # area / output / screen / edit + notification
+    ├── notify-action             # notification with buttons (notify-send -A replacement)
     ├── wallpaper-gen             # mesh gradient per theme (Pillow)
     ├── wallpaper-set             # set wallpaper with transition
     ├── wallpaper-transition      # GTK layer-shell circular reveal
@@ -221,7 +226,7 @@ Installed automatically by `install.sh`:
 | `swaybg` | Wallpaper |
 | `alacritty` (`kitty` optional) | Terminal |
 | `fastfetch`, `librespeed-cli` | Shown from the terminal / menu |
-| `grim` + `slurp` + `grimshot` + `wl-clipboard` | Screenshots |
+| `grim` + `slurp` + `swappy` + `wl-clipboard` | Screenshots & annotations |
 | `jq`, `socat` | `hypr-new-tab` (open app as a tab) |
 | `hyprlock`, `hypridle` | Lock screen, idle timeouts |
 | `cliphist` | Clipboard history |

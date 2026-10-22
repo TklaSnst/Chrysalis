@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+"""Уведомление с кнопками; печатает id нажатой кнопки (или ничего).
+
+    notify-action [-a приложение] [-i иконка] [-A id=Подпись ...] заголовок [текст]
+
+Замена `notify-send -A`: notify-send из libnotify 0.8.8 считает, что
+swaync не умеет кнопки, и показывает уведомление без них, хотя сервер
+их поддерживает. Ждёт нажатия, пока уведомление не закроют (максимум 10 мин).
+"""
+import sys
+
+import gi
+
+gi.require_version("Notify", "0.7")
+from gi.repository import GLib, Notify  # noqa: E402
+
+TIMEOUT = 600
+
+
+def main(argv):
+    app, icon, actions, rest = "notify-action", "", [], []
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a in ("-a", "-i", "-A") and i + 1 < len(argv):
+            v = argv[i + 1]
+            if a == "-a":
+                app = v
+            elif a == "-i":
+                icon = v
+            else:
+                aid, _, label = v.partition("=")
+                actions.append((aid, label or aid))
+            i += 2
+        else:
+            rest.append(a)
+            i += 1
+    if not rest:
+        sys.exit(__doc__)
+
+    Notify.init(app)
+    n = Notify.Notification.new(rest[0], rest[1] if len(rest) > 1 else "", icon)
+    loop = GLib.MainLoop()
+    chosen = []
+
+    def on_action(_n, aid, *_):
+        chosen.append(aid)
+        loop.quit()
+
+    for aid, label in actions:
+        n.add_action(aid, label, on_action)
+    n.connect("closed", lambda *_: loop.quit())
+    n.show()
+    if actions:
+        GLib.timeout_add_seconds(TIMEOUT, loop.quit)
+        loop.run()
+    if chosen:
+        print(chosen[0])
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
