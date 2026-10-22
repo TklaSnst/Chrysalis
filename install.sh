@@ -320,6 +320,14 @@ setup_profile() {
             ok "Updated $rc"
         fi
     done
+
+    # Powerlevel10k: prompt colors follow the theme (see .config/zsh/p10k-chrysalis.zsh)
+    P10K_LINE='[[ ! -f ~/.config/zsh/p10k-chrysalis.zsh ]] || source ~/.config/zsh/p10k-chrysalis.zsh'
+    if [[ -f "$HOME/.zshrc" ]] && grep -q 'p10k.zsh' "$HOME/.zshrc" \
+            && ! grep -qF 'p10k-chrysalis.zsh' "$HOME/.zshrc"; then
+        run bash -c "echo '$P10K_LINE' >> '$HOME/.zshrc'"
+        ok "Powerlevel10k colors linked to the theme"
+    fi
 }
 
 # ─── Summary ─────────────────────────────────────────────────────────────────
