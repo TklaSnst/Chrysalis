@@ -35,6 +35,7 @@ __pycache__/
 
 # ── Backups created by install.sh ─────────────────────────────────────────────
 *.bak
+*.bak-*
 *.orig
 *.log
 
