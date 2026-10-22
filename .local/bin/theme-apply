@@ -6,6 +6,8 @@
     theme-apply --current   id текущей темы
     theme-apply --contrast N  задать усиление контраста 0..1 (по умолчанию 0.6)
                               и переприменить текущую тему
+    theme-apply --opacity N   прозрачность окон 0.3..1 (1 — непрозрачные);
+                              меняет только Hyprland, без перезапуска панели
 
 Контраст: фон тёмных тем тянется к чёрному, текст — к белому (для светлых
 наоборот), акценты не трогаются. Значение хранится в ~/.config/themes/contrast.
@@ -34,6 +36,7 @@ THEMES = CFG / "themes"
 CURRENT = THEMES / "current"
 CONTRAST = THEMES / "contrast"
 DEFAULT_CONTRAST = 0.6
+OPACITY = THEMES / "opacity"
 
 HEADER = "Сгенерировано theme-apply, не редактировать — правьте JSON в ~/.config/themes"
 
@@ -58,6 +61,13 @@ def contrast_level():
         return min(1.0, max(0.0, float(CONTRAST.read_text().strip())))
     except (OSError, ValueError):
         return DEFAULT_CONTRAST
+
+
+def window_opacity():
+    try:
+        return min(1.0, max(0.3, float(OPACITY.read_text().strip())))
+    except (OSError, ValueError):
+        return 1.0
 
 
 def boost(t, k):
@@ -105,6 +115,8 @@ def hypr(t):
     for k in ("bg", "bg_alt", "surface", "surface2", "fg", "fg_dim", "fg_bright",
               "accent", "accent2", "red", "orange", "yellow", "green", "cyan", "blue", "magenta"):
         lines.append(f"${k} = rgb({t[k].lstrip('#')})")
+    # прозрачность окон (theme-apply --opacity), её берёт decoration в hyprland.conf
+    lines.append(f"$window_opacity = {window_opacity():g}")
     # полупрозрачные фоны — для «стеклянных» элементов hyprlock
     for k in ("bg", "surface"):
         lines.append(f"${k}_glass = rgba({t[k].lstrip('#')}b3)")
@@ -747,6 +759,12 @@ def main(argv):
         return 0
     if argv[0] == "--current":
         print(CURRENT.read_text().strip() if CURRENT.exists() else "")
+        return 0
+    if argv[0] == "--opacity":
+        OPACITY.write_text(argv[1] + "\n")
+        cur = CURRENT.read_text().strip() if CURRENT.exists() else "nord"
+        hypr(load(cur))
+        subprocess.run(["hyprctl", "reload"], check=False, capture_output=True)
         return 0
     if argv[0] == "--contrast":
         CONTRAST.write_text(argv[1] + "\n")

@@ -24,6 +24,7 @@
 - **Theme system** — 7 JSON palettes; `theme-apply <id>` recolors *everything* at once:
   Hyprland borders · hyprlock · waybar · swaync · wofi · swayosd · VS Code · Firefox (userChrome) · alacritty · kitty · GTK 3/4 · Qt/KDE (`kdeglobals`) · fastfetch · folder icons (Adwaita recolored to the accent) · `gsettings` dark/light (Firefox & Chromium follow)
 - **Theme from wallpaper** — `theme-from-wallpaper` builds a palette from the current wallpaper (dark or light picked automatically); choose **Из обоев** in the theme menu and the whole system follows every wallpaper change
+- **Window opacity** — `Super+O` menu (100…60 %): translucent windows over the blurred wallpaper; fullscreen windows, video players, image viewers and Resolve stay opaque
 - **Contrast boost** — `theme-apply --contrast 0..1` pulls backgrounds toward black/white without touching accents
 - **Wallpapers** — mesh-gradient wallpaper generated per theme, picker with thumbnails, animated circular transition (`swww`-style grow, no swww needed)
 - **Waybar** — workspaces, mpris, hidden drawers (battery / cpu / load, memory / temp), bluetooth, volume, backlight, network, tray, swaync control center
@@ -34,7 +35,7 @@
 - **Screenshots** — area / monitor / all screens saved to `~/Pictures/Screenshots` and copied; the notification has *Edit* (swappy annotations) and *Folder* buttons
 - **Screen recording** — `wf-recorder` for an area or the monitor (optionally with system audio); a pulsing timer in waybar, click it to stop
 - **Window tabs** — Hyprland groups with a themed tab bar; split stays a split, new tabs only on demand (`hypr-new-tab`)
-- **wofi menus** — glass-styled main menu (`Super+Alt+Space`): apps · theme · wallpaper · speedtest · clipboard · screen recording · power (lock / suspend / log out / reboot / power off, with confirmation)
+- **wofi menus** — glass-styled main menu (`Super+Alt+Space`): apps · theme · wallpaper · window opacity · speedtest · clipboard · screen recording · power (lock / suspend / log out / reboot / power off, with confirmation)
 - **Speedtest** — LibreSpeed in a floating, theme-colored terminal
 - **Auto-installer** — detects the distro, enables backports/PPA for Hyprland, links configs, generates wallpapers, applies the theme
 
@@ -67,6 +68,7 @@ theme-apply --list          # id  name  mode
 theme-apply tokyo-night
 theme-apply catppuccin-latte
 theme-apply --contrast 0.3  # 0 = palette as-is, 1 = max contrast (default 0.6)
+theme-apply --opacity 0.9   # window opacity 0.3..1, only reloads Hyprland
 ```
 
 | id | name | mode |
@@ -165,6 +167,7 @@ A default position for the transition can be stored in `~/.config/wallpapers/tra
 | `Super + Shift + E` | Power menu (lock / suspend / log out / reboot / power off) |
 | `Super + L` | Lock screen |
 | `Super + Ctrl + V` | Clipboard history |
+| `Super + O` | Window opacity menu |
 | `Super + Alt + R` | Record an area (press again to stop) |
 | `Super + Alt + Shift + R` | Record the monitor with system audio |
 | `Caps Lock` | Toggle keyboard layout (us / ru) |
@@ -199,6 +202,7 @@ A default position for the transition can be stored in `~/.config/wallpapers/tra
     ├── theme-from-wallpaper      # palette from the wallpaper → "wallpaper" theme
     ├── wofi-wallpaper            # wallpaper grid with thumbnails
     ├── wofi-power                # power menu (Super+Shift+E)
+    ├── wofi-opacity              # window opacity menu (Super+O)
     ├── wofi-clipboard            # clipboard history (Super+Ctrl+V)
     ├── screenshot                # area / output / screen / edit + notification
     ├── notify-action             # notification with buttons (notify-send -A replacement)

@@ -7,6 +7,7 @@ n="$(printf '%s\n' \
     "󰀻   Приложения" \
     "󰏘   Тема оформления" \
     "󰸉   Обои" \
+    "󰂵   Прозрачность окон" \
     "󰓅   Speedtest" \
     "󰅌   Буфер обмена" \
     "󰑊   Запись экрана" \
@@ -18,8 +19,9 @@ case "$n" in
     0) exec wofi --show drun ;;
     1) exec "$bin/wofi-theme" ;;
     2) exec "$bin/wofi-wallpaper" ;;
-    3) exec "$bin/speedtest-menu" ;;
-    4) exec "$bin/wofi-clipboard" ;;
-    5) exec "$bin/screen-record" menu ;;
-    6) exec "$bin/wofi-power" ;;
+    3) exec "$bin/wofi-opacity" ;;
+    4) exec "$bin/speedtest-menu" ;;
+    5) exec "$bin/wofi-clipboard" ;;
+    6) exec "$bin/screen-record" menu ;;
+    7) exec "$bin/wofi-power" ;;
 esac
