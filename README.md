@@ -22,7 +22,7 @@
 
 - **Hyprland** (≥ 0.54) with blur, "liquid glass" layer popups and bounce animations
 - **Theme system** — 7 JSON palettes; `theme-apply <id>` recolors *everything* at once:
-  Hyprland borders · hyprlock · waybar · swaync · wofi · swayosd · alacritty · kitty · GTK 3/4 · Qt/KDE (`kdeglobals`) · fastfetch · folder icons (Adwaita recolored to the accent) · `gsettings` dark/light (Firefox & Chromium follow)
+  Hyprland borders · hyprlock · waybar · swaync · wofi · swayosd · VS Code · Firefox (userChrome) · alacritty · kitty · GTK 3/4 · Qt/KDE (`kdeglobals`) · fastfetch · folder icons (Adwaita recolored to the accent) · `gsettings` dark/light (Firefox & Chromium follow)
 - **Contrast boost** — `theme-apply --contrast 0..1` pulls backgrounds toward black/white without touching accents
 - **Wallpapers** — mesh-gradient wallpaper generated per theme, picker with thumbnails, animated circular transition (`swww`-style grow, no swww needed)
 - **Waybar** — workspaces, mpris, hidden drawers (battery / cpu / load, memory / temp), bluetooth, volume, backlight, network, tray, swaync control center
@@ -79,6 +79,10 @@ theme-apply --contrast 0.3  # 0 = palette as-is, 1 = max contrast (default 0.6)
 | `tokyo-night` | Tokyo Night | dark |
 
 Or use the menu: `Super+Alt+Space` → **Тема оформления**.
+
+**VS Code / VSCodium** — `theme-apply` owns `workbench.colorTheme` (Default Dark/Light Modern) and `workbench.colorCustomizations` in `settings.json`; other settings stay untouched (a commented JSONC file is backed up to `settings.json.bak` once). Applies live.
+
+**Firefox** — writes `chrome/chrysalis.css` into every profile (regular, snap, flatpak), imports it from `userChrome.css` without replacing your own rules and enables `toolkit.legacyUserProfileCustomizations.stylesheets` in `user.js`. Takes effect after restarting Firefox.
 
 ### Adding a theme
 
@@ -207,7 +211,8 @@ themes/<id>.json ──► theme-apply ──► hypr/theme.conf, waybar/colors/
                         │            swayosd/style.css,
                         │            alacritty/theme.toml, kitty/theme.conf,
                         │            gtk-3.0/gtk.css, gtk-4.0/gtk.css, kdeglobals,
-                        │            fastfetch/config.jsonc, icons/ThemeAccent
+                        │            fastfetch/config.jsonc, icons/ThemeAccent,
+                        │            Code/User/settings.json, firefox/<profile>/chrome
                         └──► gsettings color-scheme / gtk-theme / icon-theme
                              hyprctl reload · waybar restart · swaync reload · swayosd restart · kitty SIGUSR1
 ```

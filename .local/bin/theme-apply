@@ -16,6 +16,8 @@
   gtk-3.0/gtk.css, gtk-4.0/gtk.css, kdeglobals (только секции Colors:*),
   ~/.local/share/icons/ThemeAccent (Adwaita с папками в цвете акцента),
   fastfetch/config.jsonc,
+  VS Code / VSCodium settings.json (workbench.colorTheme + colorCustomizations),
+  Firefox chrome/chrysalis.css, подключённый из userChrome.css (после перезапуска),
   gsettings color-scheme/gtk-theme (Firefox и Chromium следуют за ними).
 """
 import json
@@ -407,6 +409,209 @@ def icons(t):
     subprocess.run(["gsettings", "set", "org.gnome.desktop.interface", "icon-theme", ICON_THEME], check=False)
 
 
+VSCODE_DIRS = ("Code", "Code - OSS", "VSCodium", "Cursor")
+
+
+def _jsonc(text):
+    """settings.json у VS Code — JSONC: убираем // и /* */ комментарии
+    (не трогая строки) и висячие запятые."""
+    text = re.sub(r'("(?:\\.|[^"\\])*")|//[^\n]*|/\*.*?\*/',
+                  lambda m: m.group(1) or "", text, flags=re.S)
+    text = re.sub(r",(\s*[}\]])", r"\1", text)
+    return json.loads(text) if text.strip() else {}
+
+
+def vscode(t):
+    """VS Code / VSCodium: базовая тема по режиму + workbench.colorCustomizations.
+
+    Ключи workbench.colorTheme и workbench.colorCustomizations принадлежат
+    theme-apply и перезаписываются; остальные настройки не трогаются.
+    VS Code следит за settings.json и перекрашивается сразу."""
+    light = t["mode"] == "light"
+    a = lambda c, alpha: c + alpha  # #rrggbb + AA
+    colors = {
+        "focusBorder": t["accent"],
+        "foreground": t["fg"],
+        "descriptionForeground": t["fg_dim"],
+        "textLink.foreground": t["blue"],
+        "button.background": t["accent"],
+        "button.foreground": t["bg"],
+        "badge.background": t["accent"],
+        "badge.foreground": t["bg"],
+        "progressBar.background": t["accent"],
+        "input.background": t["surface"],
+        "input.foreground": t["fg"],
+        "input.border": t["surface2"],
+        "dropdown.background": t["surface"],
+        "dropdown.foreground": t["fg"],
+        "list.activeSelectionBackground": t["surface"],
+        "list.activeSelectionForeground": t["fg_bright"],
+        "list.inactiveSelectionBackground": t["surface"],
+        "list.hoverBackground": a(t["surface"], "80"),
+        "list.highlightForeground": t["accent"],
+        "editor.background": t["bg"],
+        "editor.foreground": t["fg"],
+        "editorCursor.foreground": t["accent"],
+        "editor.selectionBackground": a(t["accent"], "40"),
+        "editor.lineHighlightBackground": t["bg_alt"],
+        "editorLineNumber.foreground": t["fg_dim"],
+        "editorLineNumber.activeForeground": t["fg_bright"],
+        "editorIndentGuide.background1": t["surface"],
+        "editorWidget.background": t["bg_alt"],
+        "editorGroupHeader.tabsBackground": t["bg_alt"],
+        "editorGroup.border": t["surface"],
+        "tab.activeBackground": t["bg"],
+        "tab.activeForeground": t["fg_bright"],
+        "tab.activeBorderTop": t["accent"],
+        "tab.inactiveBackground": t["bg_alt"],
+        "tab.inactiveForeground": t["fg_dim"],
+        "tab.border": t["bg_alt"],
+        "sideBar.background": t["bg_alt"],
+        "sideBar.foreground": t["fg"],
+        "sideBarSectionHeader.background": t["bg_alt"],
+        "activityBar.background": t["bg_alt"],
+        "activityBar.foreground": t["accent"],
+        "activityBar.inactiveForeground": t["fg_dim"],
+        "activityBarBadge.background": t["accent"],
+        "activityBarBadge.foreground": t["bg"],
+        "titleBar.activeBackground": t["bg_alt"],
+        "titleBar.activeForeground": t["fg"],
+        "titleBar.inactiveBackground": t["bg_alt"],
+        "titleBar.inactiveForeground": t["fg_dim"],
+        "statusBar.background": t["bg_alt"],
+        "statusBar.foreground": t["fg_dim"],
+        "statusBar.noFolderBackground": t["bg_alt"],
+        "statusBar.debuggingBackground": t["orange"],
+        "statusBar.debuggingForeground": t["bg"],
+        "panel.background": t["bg"],
+        "panel.border": t["surface"],
+        "quickInput.background": t["bg_alt"],
+        "scrollbarSlider.background": a(t["surface2"], "80"),
+        "scrollbarSlider.hoverBackground": t["surface2"],
+        "minimap.background": t["bg"],
+        "terminal.background": t["bg"],
+        "terminal.foreground": t["fg"],
+        "terminalCursor.foreground": t["accent"],
+    }
+    for name, key in (("Black", "black"), ("Red", "red"), ("Green", "green"),
+                      ("Yellow", "yellow"), ("Blue", "blue"), ("Magenta", "magenta"),
+                      ("Cyan", "cyan"), ("White", "white")):
+        colors[f"terminal.ansi{name}"] = t[key]
+        bright = {"black": "bright_black", "white": "bright_white"}.get(key, key)
+        colors[f"terminal.ansiBright{name}"] = t[bright]
+
+    for app in VSCODE_DIRS:
+        user = CFG / app / "User"
+        if not user.parent.is_dir():
+            continue
+        path = user / "settings.json"
+        text = path.read_text() if path.exists() else ""
+        try:
+            settings = json.loads(text) if text.strip() else {}
+        except ValueError:
+            # JSONC: при перезаписи комментарии пропадут — сохраняем оригинал один раз
+            try:
+                settings = _jsonc(text)
+            except ValueError as e:
+                print(f"theme-apply: vscode: не разобрать {path}: {e}", file=sys.stderr)
+                continue
+            backup = path.with_name("settings.json.bak")
+            if not backup.exists():
+                backup.write_text(text)
+        settings["workbench.colorTheme"] = "Default Light Modern" if light else "Default Dark Modern"
+        settings["workbench.colorCustomizations"] = colors
+        user.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(settings, indent=4, ensure_ascii=False) + "\n")
+
+
+FIREFOX_ROOTS = (
+    HOME / ".mozilla/firefox",
+    HOME / "snap/firefox/common/.mozilla/firefox",          # Ubuntu snap
+    HOME / ".var/app/org.mozilla.firefox/.mozilla/firefox",  # flatpak
+)
+FIREFOX_PREF = 'user_pref("toolkit.legacyUserProfileCustomizations.stylesheets", true);'
+FIREFOX_IMPORT = '@import url("chrysalis.css");'
+
+
+def _firefox_profiles():
+    for root in FIREFOX_ROOTS:
+        ini = root / "profiles.ini"
+        if not ini.exists():
+            continue
+        for section in re.split(r"(?m)^(?=\[)", ini.read_text()):
+            if not section.startswith("[Profile"):
+                continue
+            path = re.search(r"(?m)^Path=(.+)$", section)
+            if not path:
+                continue
+            relative = re.search(r"(?m)^IsRelative=1$", section)
+            p = root / path.group(1) if relative else Path(path.group(1))
+            if p.is_dir():
+                yield p
+
+
+def firefox(t):
+    """Firefox userChrome: панели, вкладки и адресная строка в цветах темы.
+
+    Пишет chrome/chrysalis.css, подключает его первой строкой userChrome.css
+    (свой userChrome.css не затирается) и включает чтение userChrome
+    в user.js. Firefox применит после перезапуска."""
+    light = t["mode"] == "light"
+    sel_fg = t["fg_bright"] if not light else t["fg"]
+    css = f"""/* {HEADER} */
+/* {t['name']} */
+:root {{
+    --lwt-accent-color: {t['bg_alt']} !important;
+    --lwt-text-color: {t['fg']} !important;
+    --toolbar-bgcolor: {t['bg']} !important;
+    --toolbar-color: {t['fg']} !important;
+    --toolbarbutton-icon-fill: {t['fg']} !important;
+    --tab-selected-bgcolor: {t['surface']} !important;
+    --tab-selected-textcolor: {sel_fg} !important;
+    --tab-hover-background-color: {rgba(t['surface'], 0.6)} !important;
+    --toolbar-field-background-color: {t['bg_alt']} !important;
+    --toolbar-field-color: {t['fg']} !important;
+    --toolbar-field-focus-background-color: {t['surface']} !important;
+    --toolbar-field-focus-color: {sel_fg} !important;
+    --toolbar-field-focus-border-color: {t['accent']} !important;
+    --urlbarView-highlight-background: {t['surface']} !important;
+    --urlbarView-highlight-color: {sel_fg} !important;
+    --arrowpanel-background: {t['bg_alt']} !important;
+    --arrowpanel-color: {t['fg']} !important;
+    --arrowpanel-border-color: {t['surface']} !important;
+    --sidebar-background-color: {t['bg_alt']} !important;
+    --sidebar-text-color: {t['fg']} !important;
+    --focus-outline-color: {t['accent']} !important;
+    --button-primary-bgcolor: {t['accent']} !important;
+    --button-primary-color: {t['bg']} !important;
+    --color-accent-primary: {t['accent']} !important;
+}}
+#navigator-toolbox, #TabsToolbar, #titlebar {{
+    background-color: {t['bg_alt']} !important;
+    color: {t['fg']} !important;
+}}
+#nav-bar, #PersonalToolbar {{
+    background-color: {t['bg']} !important;
+}}
+.tab-background:is([selected], [multiselected]) {{
+    background: {t['surface']} !important;
+    box-shadow: inset 0 -2px 0 {t['accent']} !important;
+}}
+"""
+    for profile in _firefox_profiles():
+        chrome = profile / "chrome"
+        write(chrome / "chrysalis.css", css)
+        uc = chrome / "userChrome.css"
+        old = uc.read_text() if uc.exists() else ""
+        if FIREFOX_IMPORT not in old:
+            # @import обязан стоять до любых правил
+            uc.write_text(f"/* цвета Chrysalis (theme-apply) */\n{FIREFOX_IMPORT}\n\n{old}")
+        prefs = profile / "user.js"
+        old = prefs.read_text() if prefs.exists() else ""
+        if FIREFOX_PREF not in old:
+            prefs.write_text(old + ("" if not old or old.endswith("\n") else "\n") + FIREFOX_PREF + "\n")
+
+
 def fastfetch(t):
     """~/.config/fastfetch/config.jsonc: цвета темы, короткий список модулей, рамка.
 
@@ -549,7 +754,8 @@ def main(argv):
         return main([cur, "--quiet"])
 
     t = load(argv[0])
-    for step in (hypr, waybar, swaync, wofi, swayosd, alacritty, kitty, gtk, icons, fastfetch, kdeglobals):
+    for step in (hypr, waybar, swaync, wofi, swayosd, alacritty, kitty, gtk, icons, fastfetch, kdeglobals,
+                 vscode, firefox):
         try:
             step(t)
         except Exception as e:  # одна сломанная цель не должна валить остальные
