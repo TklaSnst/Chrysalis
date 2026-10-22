@@ -26,6 +26,7 @@
 - **Contrast boost** — `theme-apply --contrast 0..1` pulls backgrounds toward black/white without touching accents
 - **Wallpapers** — mesh-gradient wallpaper generated per theme, picker with thumbnails, animated circular transition (`swww`-style grow, no swww needed)
 - **Waybar** — workspaces, mpris, hidden drawers (battery / cpu / load, memory / temp), bluetooth, volume, backlight, network, tray, swaync control center
+- **Workspace overview** — `Super+Tab` shows every occupied workspace as a themed glass grid with thumbnails; pick one with mouse or keys, drag windows between workspaces
 - **Window tabs** — Hyprland groups with a themed tab bar; split stays a split, new tabs only on demand (`hypr-new-tab`)
 - **wofi menus** — glass-styled main menu (`Super+Alt+Space`): apps · theme · wallpaper · speedtest
 - **Speedtest** — LibreSpeed in a floating, theme-colored terminal
@@ -125,7 +126,7 @@ A default position for the transition can be stored in `~/.config/wallpapers/tra
 | `Super + T` / `Super + Shift + P` | Toggle group (window tabs) |
 | `Super + Shift + T` | Move tab out of group |
 | `Super + Ctrl + T` | Lock / unlock group |
-| `Super + Tab` / `Super + Shift + Tab` | Next / previous tab |
+| `Super + Grave` (`` ` ``) / `Super + Shift + Grave` | Next / previous tab |
 | `Super + Ctrl + 1–9` | Jump to tab N |
 | `Super + Ctrl + Shift + ←/→` | Reorder tab |
 | `Super + Alt + Arrows` | Move window into neighbouring group / split |
@@ -136,6 +137,7 @@ A default position for the transition can be stored in `~/.config/wallpapers/tra
 | `Super + S` / `Super + Shift + S` | Scratchpad show / move to |
 | `Super + R` | Resize submap (arrows, `Esc` to leave) |
 | `Super + Arrows` / `Super + Shift + Arrows` | Focus / move window |
+| `Super + Tab` | Workspace overview (click / arrows / `1–0` to switch, drag an icon to move a window, middle-click to close it) |
 | `Super + 1–0` / `Super + Shift + 1–0` | Switch / move to workspace |
 | `Super + Scroll` | Next / previous workspace |
 | `Super + Shift + C` | Reload Hyprland |
@@ -172,6 +174,8 @@ A default position for the transition can be stored in `~/.config/wallpapers/tra
     ├── wallpaper-transition      # GTK layer-shell circular reveal
     ├── speedtest-menu / -run     # LibreSpeed in a floating alacritty
     ├── hypr-new-tab              # open an app as a new tab in the current group
+    ├── hypr-overview             # Super+Tab workspace overview (GTK layer-shell)
+    ├── hypr-overview-snap        # caches workspace thumbnails for the overview
     └── waybar-autostart          # retry wrapper for waybar at session start
 ```
 

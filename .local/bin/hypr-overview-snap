@@ -1,0 +1,54 @@
+#!/bin/sh
+# Снимает миниатюры рабочих столов для hypr-overview (Super+Tab).
+#
+#   hypr-overview-snap           — демон: слушает события Hyprland и после каждой
+#                                  смены стола / открытия / закрытия окна
+#                                  обновляет снимок видимых столов
+#   hypr-overview-snap --once    — один снимок прямо сейчас (зовёт сам оверлей)
+#
+# Неактивный стол снять нельзя (его никто не рисует), поэтому храним последний
+# снимок: ~/.cache/chrysalis/overview/ws-<id>.png и рядом ws-<id>.json —
+# адреса окон на момент снимка, по ним оверлей понимает, что снимок устарел.
+
+dir="${XDG_CACHE_HOME:-$HOME/.cache}/chrysalis/overview"
+pidfile="${XDG_RUNTIME_DIR:-/tmp}/hypr-overview.pid"
+sock="$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket2.sock"
+mkdir -p "$dir"
+
+snap() {
+    # пока открыт сам оверлей — снимали бы его, а не стол
+    [ -f "$pidfile" ] && kill -0 "$(cat "$pidfile")" 2>/dev/null && return
+    clients=$(hyprctl clients -j)
+    hyprctl monitors -j | jq -r '.[] | select(.disabled | not)
+        | "\(.name) \(.activeWorkspace.id)"' |
+    while read -r mon ws; do
+        [ "$ws" -gt 0 ] 2>/dev/null || continue
+        grim -o "$mon" -s 0.25 -l 1 "$dir/ws-$ws.png.tmp" 2>/dev/null || continue
+        mv -f "$dir/ws-$ws.png.tmp" "$dir/ws-$ws.png"
+        printf '%s' "$clients" | jq -c --argjson ws "$ws" \
+            '[.[] | select(.workspace.id == $ws) | .address] | sort' > "$dir/ws-$ws.json"
+    done
+}
+
+if [ "$1" = "--once" ]; then
+    snap
+    exit 0
+fi
+
+# Один экземпляр демона на сессию
+exec 9>"$dir/.snap.lock"
+flock -n 9 || exit 0
+
+[ -S "$sock" ] || exit 1
+
+# Дебаунс: каждое новое событие откладывает снимок; ждём конца slide-анимации
+pending=""
+socat -U - "UNIX-CONNECT:$sock" | while read -r line; do
+    case "$line" in
+        workspacev2\>\>*|openwindow\>\>*|closewindow\>\>*|movewindowv2\>\>*|focusedmonv2\>\>*)
+            [ -n "$pending" ] && kill "$pending" 2>/dev/null
+            ( sleep 0.45; snap ) &
+            pending=$!
+            ;;
+    esac
+done

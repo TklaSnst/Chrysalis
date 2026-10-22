@@ -1,0 +1,649 @@
+#!/usr/bin/env python3
+"""Обзор всех рабочих столов (Super+Tab) — альтернатива Super+1..0.
+
+    hypr-overview        открыть; повторный вызов закрывает (toggle)
+
+Слой layer-shell поверх всего: сетка карточек-столов с миниатюрами.
+Показываются только столы с окнами (и текущий). Текущий снимается заново
+при открытии, остальные — последний снимок из hypr-overview-snap, если окна
+на столе с тех пор не менялись, иначе схема: обои + прямоугольники окон.
+
+  клик / Enter / 1–0      перейти на стол
+  стрелки, hjkl           выбрать карточку
+  Esc, клик мимо, Super+Tab   закрыть
+  иконку окна перетащить на другую карточку — перенести окно
+  средний клик по иконке  закрыть окно
+"""
+import json
+import math
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+import gi
+
+gi.require_version("Gtk", "3.0")
+gi.require_version("Gdk", "3.0")
+gi.require_version("GtkLayerShell", "0.1")
+gi.require_version("GdkPixbuf", "2.0")
+gi.require_version("PangoCairo", "1.0")
+import cairo  # noqa: E402
+from gi.repository import (Gdk, GdkPixbuf, Gio, GLib, Gtk,  # noqa: E402
+                           GtkLayerShell, Pango, PangoCairo)
+
+# В новом PyGObject DesktopAppInfo и unix-сигналы переехали в *Unix-модули
+try:
+    from gi.repository import GioUnix
+    DesktopAppInfo = GioUnix.DesktopAppInfo
+except ImportError:
+    DesktopAppInfo = Gio.DesktopAppInfo
+try:
+    from gi.repository import GLibUnix
+    signal_add = GLibUnix.signal_add
+except ImportError:
+    signal_add = GLib.unix_signal_add
+
+HOME = Path.home()
+CACHE = Path(os.environ.get("XDG_CACHE_HOME", HOME / ".cache")) / "chrysalis" / "overview"
+PIDFILE = Path(os.environ.get("XDG_RUNTIME_DIR", "/tmp")) / "hypr-overview.pid"
+COLORS = HOME / ".config" / "wofi" / "colors.css"
+WALLPAPER = HOME / ".config" / "wallpapers" / "current"
+
+GAP = 28
+PAD = 10             # отступ миниатюры внутри карточки
+LABEL_H = 34         # полоска с номером и иконками под миниатюрой
+ICON = 22
+DRAG_THRESHOLD = 6
+OPEN_TIME = 0.24     # анимация появления, с
+CLOSE_TIME = 0.14    # и исчезновения
+STAGGER = 0.035      # задержка между карточками при появлении
+
+FALLBACK = {
+    "base": "#1e1e2e", "surface": "#313244", "text": "#cdd6f4",
+    "text-dim": "#a6adc8", "accent": "#89b4fa", "red": "#f38ba8",
+}
+
+
+# ── данные ───────────────────────────────────────────────────────────────────
+def hyprctl(*args):
+    out = subprocess.run(["hyprctl", *args, "-j"], capture_output=True, text=True).stdout
+    try:
+        return json.loads(out)
+    except json.JSONDecodeError:
+        return []
+
+
+def dispatch(*args):
+    subprocess.Popen(["hyprctl", "dispatch", *args], stdout=subprocess.DEVNULL)
+
+
+def rgb(hexstr, alpha=1.0):
+    h = hexstr.lstrip("#")
+    return (int(h[0:2], 16) / 255, int(h[2:4], 16) / 255, int(h[4:6], 16) / 255, alpha)
+
+
+def load_colors():
+    """Палитра текущей темы — из wofi/colors.css, его пишет theme-apply."""
+    colors = dict(FALLBACK)
+    try:
+        for name, value in re.findall(r"@define-color\s+([\w-]+)\s+(#[0-9a-fA-F]{6})",
+                                      COLORS.read_text()):
+            colors[name] = value
+    except OSError:
+        pass
+    return {k: rgb(v) for k, v in colors.items()}
+
+
+class Icons:
+    """Иконка по классу окна: прямое имя, .desktop или StartupWMClass."""
+
+    def __init__(self):
+        self.theme = Gtk.IconTheme.get_default()
+        self.cache = {}
+        self.wmclass = None
+
+    def _by_wmclass(self, cls):
+        if self.wmclass is None:
+            self.wmclass = {}
+            for app in Gio.AppInfo.get_all():
+                wm = app.get_startup_wm_class() if hasattr(app, "get_startup_wm_class") else None
+                icon = app.get_icon()
+                if wm and icon:
+                    self.wmclass[wm.lower()] = icon
+        return self.wmclass.get(cls.lower())
+
+    def _lookup(self, cls):
+        # org.telegram.desktop._<hash>, firefox_firefox (snap) и т.п.
+        names = [cls, cls.lower(), cls.split("._")[0], cls.split("_")[0],
+                 cls.split(".")[-1].lower()]
+        for name in names:
+            if name and self.theme.has_icon(name):
+                return Gio.ThemedIcon.new(name)
+            try:
+                app = DesktopAppInfo.new(name + ".desktop")
+            except TypeError:
+                app = None
+            if app and app.get_icon():
+                return app.get_icon()
+        icon = self._by_wmclass(cls)
+        if icon:
+            return icon
+        for group in DesktopAppInfo.search(cls.split("._")[0]):
+            app = DesktopAppInfo.new(group[0])
+            if app and app.get_icon():
+                return app.get_icon()
+        return Gio.ThemedIcon.new("application-x-executable")
+
+    def get(self, cls, size):
+        key = (cls, size)
+        if key not in self.cache:
+            pb = None
+            info = self.theme.lookup_by_gicon(self._lookup(cls or ""), size,
+                                              Gtk.IconLookupFlags.FORCE_SIZE)
+            if info is None:
+                info = self.theme.lookup_icon("application-x-executable", size,
+                                              Gtk.IconLookupFlags.FORCE_SIZE)
+            try:
+                pb = info.load_icon() if info else None
+            except GLib.Error:
+                pb = None
+            self.cache[key] = pb
+        return self.cache[key]
+
+
+def load_pixbuf(path):
+    try:
+        return GdkPixbuf.Pixbuf.new_from_file(str(path))
+    except GLib.Error:
+        return None
+
+
+def fill(pb, w, h):
+    """Картинка, обрезанная по центру под w×h (как swaybg -m fill)."""
+    if pb is None:
+        return None
+    scale = max(w / pb.get_width(), h / pb.get_height())
+    sw, sh = max(1, math.ceil(pb.get_width() * scale)), max(1, math.ceil(pb.get_height() * scale))
+    pb = pb.scale_simple(sw, sh, GdkPixbuf.InterpType.BILINEAR)
+    surf = cairo.ImageSurface(cairo.FORMAT_RGB24, w, h)
+    cr = cairo.Context(surf)
+    Gdk.cairo_set_source_pixbuf(cr, pb, (w - sw) / 2, (h - sh) / 2)
+    cr.paint()
+    return surf
+
+
+def ease_out_back(x, k=1.4):
+    """Быстрый выход с небольшим перелётом — как bounce у остальных слоёв."""
+    x -= 1
+    return 1 + (k + 1) * x ** 3 + k * x ** 2
+
+
+def rounded(cr, x, y, w, h, r):
+    cr.new_sub_path()
+    cr.arc(x + w - r, y + r, r, -math.pi / 2, 0)
+    cr.arc(x + w - r, y + h - r, r, 0, math.pi / 2)
+    cr.arc(x + r, y + h - r, r, math.pi / 2, math.pi)
+    cr.arc(x + r, y + r, r, math.pi, 3 * math.pi / 2)
+    cr.close_path()
+
+
+# ── оверлей ──────────────────────────────────────────────────────────────────
+class Overview(Gtk.Window):
+    def __init__(self):
+        super().__init__()
+        self.c = load_colors()
+        self.icons = Icons()
+
+        self.monitors = [m for m in hyprctl("monitors") if not m.get("disabled")]
+        self.mon = next((m for m in self.monitors if m.get("focused")), self.monitors[0])
+        self.active = self.mon["activeWorkspace"]["id"]
+        # Текущий стол снимаем сразу полным кадром: grim без -s — ~40 мс,
+        # а программное уменьшение -s 0.25 стоит ~200 мс. Пока он работает,
+        # GTK успевает подняться; результат забирается в layout()
+        self.live = subprocess.Popen(["grim", "-o", self.mon["name"], "-t", "ppm", "-"],
+                                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+        self.clients = [c for c in hyprctl("clients")
+                        if c.get("mapped", True) and c["workspace"]["id"] > 0]
+
+        # пустые столы не показываем, кроме того, на котором стоим
+        used = {c["workspace"]["id"] for c in self.clients}
+        self.ws = sorted(used | {self.active}) if self.active > 0 else sorted(used) or [1]
+        self.sel = self.ws.index(self.active) if self.active in self.ws else 0
+        self.wallpaper = None
+        self.hover = None
+
+        self.cards = {}      # ws -> (x, y, w, h) карточки
+        self.thumbs = {}     # ws -> (x, y, w, h) миниатюры
+        self.hits = []       # (x, y, w, h, client) иконки и окна для drag/close
+        self.surfaces = {}
+        self.drag = None     # {"client", "x0", "y0", "x", "y", "active"}
+        self.layout_size = None
+        # анимация: t — прогресс 0..1, closing — уходим, on_done — что сделать в конце
+        self.t0 = None
+        self.t = 0.0
+        self.closing = False
+        self.close_from = 1.0
+        self.ticking = False
+
+        GtkLayerShell.init_for_window(self)
+        GtkLayerShell.set_namespace(self, "hypr-overview")
+        GtkLayerShell.set_layer(self, GtkLayerShell.Layer.OVERLAY)
+        GtkLayerShell.set_exclusive_zone(self, -1)
+        GtkLayerShell.set_keyboard_mode(self, GtkLayerShell.KeyboardMode.EXCLUSIVE)
+        for edge in (GtkLayerShell.Edge.TOP, GtkLayerShell.Edge.BOTTOM,
+                     GtkLayerShell.Edge.LEFT, GtkLayerShell.Edge.RIGHT):
+            GtkLayerShell.set_anchor(self, edge, True)
+        gdk_mon = self._gdk_monitor()
+        if gdk_mon is not None:
+            GtkLayerShell.set_monitor(self, gdk_mon)
+
+        visual = self.get_screen().get_rgba_visual()
+        if visual is not None:
+            self.set_visual(visual)
+        self.set_app_paintable(True)
+
+        self.area = Gtk.DrawingArea()
+        self.area.set_events(Gdk.EventMask.BUTTON_PRESS_MASK | Gdk.EventMask.BUTTON_RELEASE_MASK
+                             | Gdk.EventMask.POINTER_MOTION_MASK | Gdk.EventMask.LEAVE_NOTIFY_MASK)
+        self.area.connect("draw", self.on_draw)
+        self.area.connect("button-press-event", self.on_press)
+        self.area.connect("button-release-event", self.on_release)
+        self.area.connect("motion-notify-event", self.on_motion)
+        self.add(self.area)
+        self.connect("key-press-event", self.on_key)
+        self.connect("map", lambda *_: self.animate())
+
+    def animate(self):
+        self.t0 = None
+        if not self.ticking:
+            self.ticking = True
+            self.area.add_tick_callback(self.on_tick)
+
+    def on_tick(self, widget, clock):
+        now = clock.get_frame_time() / 1e6
+        if self.t0 is None:
+            self.t0 = now
+        dur = CLOSE_TIME if self.closing else OPEN_TIME + STAGGER * (len(self.ws) - 1)
+        x = min(1.0, (now - self.t0) / dur)
+        # закрытие стартует с текущей точки, даже если появление не доиграло
+        self.t = self.close_from * (1 - x) if self.closing else x
+        widget.queue_draw()
+        if x < 1.0:
+            return GLib.SOURCE_CONTINUE
+        self.ticking = False
+        if self.closing:
+            Gtk.main_quit()
+        return GLib.SOURCE_REMOVE
+
+    def card_progress(self, i):
+        """Прогресс появления i-й карточки (с волной слева направо)."""
+        if self.closing:
+            return self.t * self.t  # ease-in: все гаснут вместе
+        total = OPEN_TIME + STAGGER * (len(self.ws) - 1)
+        x = (self.t * total - STAGGER * i) / OPEN_TIME
+        return max(0.0, min(1.0, x))
+
+    def _gdk_monitor(self):
+        """Gdk-монитор, совпадающий по положению со сфокусированным в Hyprland."""
+        display = Gdk.Display.get_default()
+        for i in range(display.get_n_monitors()):
+            m = display.get_monitor(i)
+            g = m.get_geometry()
+            if g.x == self.mon["x"] and g.y == self.mon["y"]:
+                return m
+        return None
+
+    # ── раскладка ──
+    def layout(self, w, h):
+        if self.layout_size == (w, h):
+            return
+        self.layout_size = (w, h)
+        n = len(self.ws)
+        cols = self.columns()
+        rows = math.ceil(n / cols)
+        aspect = self.mon["height"] / self.mon["width"]
+        cw = (w * 0.86 - GAP * (cols - 1)) / cols
+        tw = cw - 2 * PAD
+        ch = tw * aspect + 2 * PAD + LABEL_H
+        max_h = h * 0.84
+        if rows * ch + (rows - 1) * GAP > max_h:
+            ch = (max_h - GAP * (rows - 1)) / rows
+            tw = (ch - 2 * PAD - LABEL_H) / aspect
+            cw = tw + 2 * PAD
+        cw, ch, tw = int(cw), int(ch), int(tw)
+        th = int(tw * aspect)
+        x0 = (w - (cols * cw + (cols - 1) * GAP)) / 2
+        y0 = (h - (rows * ch + (rows - 1) * GAP)) / 2
+        for i, ws in enumerate(self.ws):
+            r, col = divmod(i, cols)
+            # последний неполный ряд — по центру
+            in_row = min(cols, n - r * cols)
+            xr = x0 + (cols - in_row) * (cw + GAP) / 2
+            x, y = int(xr + col * (cw + GAP)), int(y0 + r * (ch + GAP))
+            self.cards[ws] = (x, y, cw, ch)
+            self.thumbs[ws] = (x + PAD, y + PAD, tw, th)
+        self.surfaces = {ws: self.thumbnail(ws, tw, th) for ws in self.ws}
+
+    def columns(self):
+        n = len(self.ws)
+        return 3 if n <= 6 else 4 if n <= 8 else 5
+
+    def live_snapshot(self, w, h):
+        """Кадр текущего стола от grim, запущенного в __init__."""
+        if self.live is None:
+            return None
+        try:
+            data, _ = self.live.communicate(timeout=2)
+            loader = GdkPixbuf.PixbufLoader()
+            loader.write(data)
+            loader.close()
+            return fill(loader.get_pixbuf(), w, h)
+        except (subprocess.TimeoutExpired, GLib.Error):
+            self.live.kill()
+            return None
+        finally:
+            self.live = None
+
+    def thumbnail(self, ws, w, h):
+        if ws == self.active:
+            surf = self.live_snapshot(w, h)
+            if surf is not None:
+                return surf, False
+        own = sorted(c["address"] for c in self.clients if c["workspace"]["id"] == ws)
+        png, meta = CACHE / f"ws-{ws}.png", CACHE / f"ws-{ws}.json"
+        if own and png.exists():
+            try:
+                fresh = json.loads(meta.read_text()) == own
+            except (OSError, json.JSONDecodeError):
+                fresh = False
+            if fresh:
+                surf = fill(load_pixbuf(png), w, h)
+                if surf is not None:
+                    return surf, False
+        return self.schematic(ws, w, h), True
+
+    def wallpaper_copy(self, w, h):
+        """Обои под размер миниатюры — декодируются один раз на все карточки."""
+        if self.wallpaper is None or (self.wallpaper and self.wallpaper.get_width() != w):
+            self.wallpaper = fill(load_pixbuf(WALLPAPER), w, h) or False
+        surf = cairo.ImageSurface(cairo.FORMAT_RGB24, w, h)
+        cr = cairo.Context(surf)
+        if self.wallpaper:
+            cr.set_source_surface(self.wallpaper, 0, 0)
+        else:
+            cr.set_source_rgba(*self.c["surface"])
+        cr.paint()
+        return surf
+
+    def schematic(self, ws, w, h):
+        """Обои + прямоугольники окон в реальных пропорциях."""
+        surf = self.wallpaper_copy(w, h)
+        cr = cairo.Context(surf)
+        cr.set_source_rgba(0, 0, 0, 0.25)
+        cr.paint()
+        sx, sy = w / self.mon["width"], h / self.mon["height"]
+        wins = [c for c in self.clients if c["workspace"]["id"] == ws]
+        # плавающие поверх тайловых, как на экране
+        for c in sorted(wins, key=lambda c: c.get("floating", False)):
+            x = (c["at"][0] - self.mon["x"]) * sx
+            y = (c["at"][1] - self.mon["y"]) * sy
+            ww, hh = c["size"][0] * sx, c["size"][1] * sy
+            rounded(cr, x, y, ww, hh, 4)
+            cr.set_source_rgba(*self.c["base"][:3], 0.82)
+            cr.fill_preserve()
+            cr.set_source_rgba(*self.c["text-dim"][:3], 0.5)
+            cr.set_line_width(1)
+            cr.stroke()
+            size = int(max(16, min(64, min(ww, hh) * 0.4)))
+            pb = self.icons.get(c["class"], size)
+            if pb is not None and ww > size and hh > size:
+                Gdk.cairo_set_source_pixbuf(cr, pb, x + (ww - size) / 2, y + (hh - size) / 2)
+                cr.paint()
+        return surf
+
+    # ── отрисовка ──
+    def on_draw(self, widget, cr):
+        w, h = widget.get_allocated_width(), widget.get_allocated_height()
+        self.layout(w, h)
+        fade = min(1.0, self.t * 2) if not self.closing else self.t
+        cr.set_operator(cairo.OPERATOR_SOURCE)
+        cr.set_source_rgba(*self.c["base"][:3], 0.55 * fade)
+        cr.paint()
+        cr.set_operator(cairo.OPERATOR_OVER)
+
+        self.hits = []
+        target = self.card_at(self.drag["x"], self.drag["y"]) if self.drag and self.drag["active"] else None
+        for i, ws in enumerate(self.ws):
+            p = self.card_progress(i)
+            if p <= 0:
+                continue
+            x, y, cw, ch = self.cards[ws]
+            scale = 0.9 + 0.1 * (p if self.closing else ease_out_back(p))
+            cr.save()
+            cr.translate(x + cw / 2, y + ch / 2)
+            cr.scale(scale, scale)
+            cr.translate(-(x + cw / 2), -(y + ch / 2))
+            cr.push_group()
+            self.draw_card(cr, ws, i == self.sel, ws == self.hover or ws == target)
+            cr.pop_group_to_source()
+            cr.paint_with_alpha(min(1.0, p * 1.5))
+            cr.restore()
+
+        if self.drag and self.drag["active"]:
+            pb = self.icons.get(self.drag["client"]["class"], 48)
+            if pb is not None:
+                Gdk.cairo_set_source_pixbuf(cr, pb, self.drag["x"] - 24, self.drag["y"] - 24)
+                cr.paint_with_alpha(0.9)
+        return True
+
+    def draw_card(self, cr, ws, selected, hovered):
+        x, y, cw, ch = self.cards[ws]
+        tx, ty, tw, th = self.thumbs[ws]
+        current = ws == self.active
+
+        rounded(cr, x, y, cw, ch, 12)
+        cr.set_source_rgba(*self.c["surface"][:3], 0.85 if hovered else 0.6)
+        cr.fill()
+
+        surf, _ = self.surfaces[ws]
+        cr.save()
+        rounded(cr, tx, ty, tw, th, 8)
+        cr.clip()
+        cr.set_source_surface(surf, tx, ty)
+        cr.paint()
+        cr.restore()
+
+        if selected or current:
+            rounded(cr, x + 1, y + 1, cw - 2, ch - 2, 12)
+            cr.set_source_rgba(*self.c["accent"][:3], 1.0 if selected else 0.45)
+            cr.set_line_width(3 if selected else 2)
+            cr.stroke()
+
+        # номер стола
+        layout = PangoCairo.create_layout(cr)
+        layout.set_font_description(Pango.FontDescription("JetBrains Mono Bold 13"))
+        layout.set_text(str(ws), -1)
+        _, lh = layout.get_pixel_size()
+        ly = ty + th + (LABEL_H + PAD - lh) / 2
+        cr.set_source_rgba(*(self.c["accent"] if current else self.c["text"]))
+        cr.move_to(tx + 2, ly)
+        PangoCairo.show_layout(cr, layout)
+
+        # иконки окон справа налево — их можно тащить на другой стол
+        wins = [c for c in self.clients if c["workspace"]["id"] == ws]
+        ix = tx + tw - ICON
+        iy = ty + th + (LABEL_H + PAD - ICON) / 2
+        for c in reversed(wins):
+            if ix < tx + 40:
+                break
+            pb = self.icons.get(c["class"], ICON)
+            if pb is not None:
+                Gdk.cairo_set_source_pixbuf(cr, pb, ix, iy)
+                cr.paint_with_alpha(0.35 if self.dragging(c) else 1.0)
+            self.hits.append((ix, iy, ICON, ICON, c))
+            ix -= ICON + 6
+        if not wins:
+            layout.set_font_description(Pango.FontDescription("JetBrains Mono 10"))
+            layout.set_text("пусто", -1)
+            pw, ph = layout.get_pixel_size()
+            cr.set_source_rgba(*self.c["text-dim"])
+            cr.move_to(tx + tw - pw, ty + th + (LABEL_H + PAD - ph) / 2)
+            PangoCairo.show_layout(cr, layout)
+
+        # окна на схеме — тоже цели для drag
+        surf_schematic = self.surfaces[ws][1]
+        if surf_schematic:
+            sx, sy = tw / self.mon["width"], th / self.mon["height"]
+            for c in wins:
+                self.hits.append((tx + (c["at"][0] - self.mon["x"]) * sx,
+                                  ty + (c["at"][1] - self.mon["y"]) * sy,
+                                  c["size"][0] * sx, c["size"][1] * sy, c))
+
+    def dragging(self, client):
+        return bool(self.drag and self.drag["active"] and self.drag["client"] is client)
+
+    # ── попадания ──
+    def card_at(self, px, py):
+        for ws, (x, y, w, h) in self.cards.items():
+            if x <= px <= x + w and y <= py <= y + h:
+                return ws
+        return None
+
+    def client_at(self, px, py):
+        # иконки добавлены раньше схемы, они приоритетнее
+        for x, y, w, h, c in self.hits:
+            if x <= px <= x + w and y <= py <= y + h:
+                return c
+        return None
+
+    # ── мышь ──
+    def on_press(self, widget, ev):
+        if self.closing:
+            return True
+        if ev.type != Gdk.EventType.BUTTON_PRESS:
+            return True
+        client = self.client_at(ev.x, ev.y)
+        if ev.button == 2 and client:
+            dispatch("closewindow", f"address:{client['address']}")
+            self.clients.remove(client)
+            self.refresh(client["workspace"]["id"])
+        elif ev.button == 1:
+            self.drag = {"client": client, "x0": ev.x, "y0": ev.y,
+                         "x": ev.x, "y": ev.y, "active": False}
+        elif ev.button == 3:
+            self.close()
+        return True
+
+    def on_motion(self, widget, ev):
+        if self.closing:
+            return True
+        if self.drag and self.drag["client"]:
+            self.drag["x"], self.drag["y"] = ev.x, ev.y
+            if math.hypot(ev.x - self.drag["x0"], ev.y - self.drag["y0"]) > DRAG_THRESHOLD:
+                self.drag["active"] = True
+        hover = self.card_at(ev.x, ev.y)
+        if hover != self.hover or (self.drag and self.drag["active"]):
+            self.hover = hover
+            widget.queue_draw()
+        return True
+
+    def on_release(self, widget, ev):
+        if self.closing:
+            return True
+        drag, self.drag = self.drag, None
+        if ev.button != 1 or drag is None:
+            return True
+        ws = self.card_at(ev.x, ev.y)
+        if drag["active"]:
+            client = drag["client"]
+            src = client["workspace"]["id"]
+            if ws is not None and ws != src:
+                dispatch("movetoworkspacesilent", f"{ws},address:{client['address']}")
+                client["workspace"]["id"] = ws
+                self.refresh(src, ws)
+            widget.queue_draw()
+        elif ws is not None:
+            self.go(ws)
+        else:
+            self.close()
+        return True
+
+    def refresh(self, *wss):
+        """Перерисовать миниатюры после переноса/закрытия окна (уже схемой)."""
+        for ws in wss:
+            if ws in self.thumbs:
+                _, _, tw, th = self.thumbs[ws]
+                self.surfaces[ws] = (self.schematic(ws, tw, th), True)
+        self.area.queue_draw()
+
+    # ── клавиатура ──
+    def on_key(self, widget, ev):
+        if self.closing:
+            return True
+        key = Gdk.keyval_name(ev.keyval) or ""
+        n = len(self.ws)
+        cols = self.columns()
+        moves = {"Left": -1, "h": -1, "Right": 1, "l": 1,
+                 "Up": -cols, "k": -cols, "Down": cols, "j": cols}
+        if key == "Escape":
+            self.close()
+        elif key in ("Return", "KP_Enter", "space"):
+            self.go(self.ws[self.sel])
+        elif key in moves:
+            self.sel = max(0, min(n - 1, self.sel + moves[key]))
+            self.area.queue_draw()
+        elif key.isdigit() or key.startswith("KP_") and key[3:].isdigit():
+            d = int(key[-1])
+            self.go(10 if d == 0 else d)
+        return True
+
+    # ── выход ──
+    def go(self, ws):
+        if ws != self.active and not self.closing:
+            dispatch("workspace", str(ws))  # slide стола идёт вместе с затуханием
+        self.close()
+
+    def close(self):
+        if self.closing:
+            return
+        self.closing = True
+        self.drag = None
+        self.close_from = self.t
+        self.animate()
+
+
+def already_running():
+    """Повторный Super+Tab закрывает уже открытый обзор."""
+    try:
+        pid = int(PIDFILE.read_text())
+        # pid мог достаться другому процессу после падения
+        if b"hypr-overview" not in Path(f"/proc/{pid}/cmdline").read_bytes():
+            return False
+        os.kill(pid, 15)
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def main():
+    if already_running():
+        PIDFILE.unlink(missing_ok=True)
+        return
+    PIDFILE.write_text(str(os.getpid()))
+    try:
+        win = Overview()
+        signal_add(GLib.PRIORITY_DEFAULT, 15, lambda: win.close() or False)
+        win.show_all()
+        Gtk.main()
+    finally:
+        try:
+            if int(PIDFILE.read_text()) == os.getpid():
+                PIDFILE.unlink()
+        except (OSError, ValueError):
+            pass
+
+
+if __name__ == "__main__":
+    sys.exit(main())
