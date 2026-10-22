@@ -22,7 +22,7 @@
 
 - **Hyprland** (≥ 0.54) with blur, "liquid glass" layer popups and bounce animations
 - **Theme system** — 7 JSON palettes; `theme-apply <id>` recolors *everything* at once:
-  Hyprland borders · hyprlock · waybar · swaync · wofi · swayosd · VS Code · Firefox (userChrome) · alacritty · kitty · GTK 3/4 · Qt/KDE (`kdeglobals`) · fastfetch · folder icons (Adwaita recolored to the accent) · `gsettings` dark/light (Firefox & Chromium follow)
+  Hyprland borders · hyprlock · waybar · swaync · wofi · swayosd · VS Code · Firefox (userChrome) · btop · cava · alacritty · kitty · GTK 3/4 · Qt/KDE (`kdeglobals`) · fastfetch · folder icons (Adwaita recolored to the accent) · `gsettings` dark/light (Firefox & Chromium follow)
 - **Theme from wallpaper** — `theme-from-wallpaper` builds a palette from the current wallpaper (dark or light picked automatically); choose **Из обоев** in the theme menu and the whole system follows every wallpaper change
 - **Floating utilities** — pavucontrol, network editor, blueman, polkit, swappy and Open/Save dialogs open centered as floating windows; Picture-in-Picture video sticks to a corner on every workspace
 - **Window opacity** — `Super+O` menu (100…60 %): translucent windows over the blurred wallpaper; fullscreen windows, video players, image viewers and Resolve stay opaque
@@ -229,9 +229,10 @@ themes/<id>.json ──► theme-apply ──► hypr/theme.conf, waybar/colors/
                         │            alacritty/theme.toml, kitty/theme.conf,
                         │            gtk-3.0/gtk.css, gtk-4.0/gtk.css, kdeglobals,
                         │            fastfetch/config.jsonc, icons/ThemeAccent,
-                        │            Code/User/settings.json, firefox/<profile>/chrome
+                        │            Code/User/settings.json, firefox/<profile>/chrome,
+                        │            btop/themes/chrysalis.theme, cava/themes/chrysalis
                         └──► gsettings color-scheme / gtk-theme / icon-theme
-                             hyprctl reload · waybar restart · swaync reload · swayosd restart · kitty SIGUSR1
+                             hyprctl reload · waybar restart · swaync reload · swayosd restart · kitty SIGUSR1 · btop/cava SIGUSR2
 ```
 
 Every target is a small function in `theme-apply`; to support a new app add one that writes its file and append it to the tuple in `main()`. Generated files carry a header and are git-ignored.

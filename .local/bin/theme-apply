@@ -20,6 +20,7 @@
   fastfetch/config.jsonc,
   VS Code / VSCodium settings.json (workbench.colorTheme + colorCustomizations),
   Firefox chrome/chrysalis.css, подключённый из userChrome.css (после перезапуска),
+  btop/themes/chrysalis.theme, cava/themes/chrysalis (+ выбор темы в их конфигах),
   gsettings color-scheme/gtk-theme (Firefox и Chromium следуют за ними).
 """
 import json
@@ -421,6 +422,74 @@ def icons(t):
     subprocess.run(["gsettings", "set", "org.gnome.desktop.interface", "icon-theme", ICON_THEME], check=False)
 
 
+def btop(t):
+    """btop: themes/chrysalis.theme + color_theme в btop.conf.
+    Работающий btop перечитывает конфиг по SIGUSR2."""
+    grad = lambda name, a, b, c: "".join(
+        f'theme[{name}_{k}]="{v}"\n' for k, v in (("start", a), ("mid", b), ("end", c)))
+    theme = f"""# {HEADER}
+# {t['name']}
+theme[main_bg]="{t['bg']}"
+theme[main_fg]="{t['fg']}"
+theme[title]="{t['fg_bright']}"
+theme[hi_fg]="{t['accent']}"
+theme[selected_bg]="{t['surface']}"
+theme[selected_fg]="{t['fg_bright']}"
+theme[inactive_fg]="{t['fg_dim']}"
+theme[graph_text]="{t['fg_dim']}"
+theme[meter_bg]="{t['surface']}"
+theme[proc_misc]="{t['accent2']}"
+theme[cpu_box]="{t['surface2']}"
+theme[mem_box]="{t['surface2']}"
+theme[net_box]="{t['surface2']}"
+theme[proc_box]="{t['surface2']}"
+theme[div_line]="{t['surface2']}"
+""" + grad("temp", t["green"], t["yellow"], t["red"]) \
+      + grad("cpu", t["accent"], t["accent2"], t["red"]) \
+      + grad("free", t["green"], t["cyan"], t["accent"]) \
+      + grad("cached", t["blue"], t["accent"], t["cyan"]) \
+      + grad("available", t["yellow"], t["orange"], t["red"]) \
+      + grad("used", t["accent2"], t["magenta"], t["red"]) \
+      + grad("download", t["blue"], t["accent"], t["cyan"]) \
+      + grad("upload", t["magenta"], t["accent2"], t["red"]) \
+      + grad("process", t["accent"], t["accent2"], t["red"])
+    write(CFG / "btop/themes/chrysalis.theme", theme)
+
+    conf = CFG / "btop/btop.conf"
+    text = conf.read_text() if conf.exists() else ""
+    line = 'color_theme = "chrysalis"'
+    if re.search(r"(?m)^color_theme\s*=", text):
+        text = re.sub(r"(?m)^color_theme\s*=.*$", line, text)
+    else:
+        text = line + "\n" + text  # остальное btop допишет сам при выходе
+    conf.write_text(text)
+    subprocess.run(["pkill", "-USR2", "-x", "btop"], check=False)
+
+
+def cava(t):
+    """cava: тема-градиент themes/chrysalis + theme = 'chrysalis' в [color].
+    Работающий cava перечитывает цвета по SIGUSR2."""
+    stops = []
+    for c in (t["blue"], t["accent"], t["cyan"], t["accent2"], t["magenta"]):
+        if c.lower() not in (x.lower() for x in stops):  # у многих тем accent2 == blue
+            stops.append(c)
+    theme = f"# {HEADER}\n# {t['name']}\n[color]\ngradient = 1\n" + "".join(
+        f"gradient_color_{i} = '{c}'\n" for i, c in enumerate(stops, 1))
+    write(CFG / "cava/themes/chrysalis", theme)
+
+    conf = CFG / "cava/config"
+    text = conf.read_text() if conf.exists() else "[color]\n"
+    line = "theme = 'chrysalis'"
+    if re.search(r"(?m)^\s*theme\s*=", text):
+        text = re.sub(r"(?m)^\s*theme\s*=.*$", line, text)
+    elif re.search(r"(?m)^\[color\]", text):
+        text = re.sub(r"(?m)^\[color\][ \t]*$", "[color]\n" + line, text, count=1)
+    else:
+        text += "\n[color]\n" + line + "\n"
+    conf.write_text(text)
+    subprocess.run(["pkill", "-USR2", "-x", "cava"], check=False)
+
+
 VSCODE_DIRS = ("Code", "Code - OSS", "VSCodium", "Cursor")
 
 
@@ -773,7 +842,7 @@ def main(argv):
 
     t = load(argv[0])
     for step in (hypr, waybar, swaync, wofi, swayosd, alacritty, kitty, gtk, icons, fastfetch, kdeglobals,
-                 vscode, firefox):
+                 vscode, firefox, btop, cava):
         try:
             step(t)
         except Exception as e:  # одна сломанная цель не должна валить остальные

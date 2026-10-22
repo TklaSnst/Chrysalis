@@ -163,6 +163,8 @@ PKGS_BASE=(
 PKGS_EXTRAS=(
     kitty
     htop
+    btop
+    cava
     thunar
     thunar-archive-plugin
     file-roller
