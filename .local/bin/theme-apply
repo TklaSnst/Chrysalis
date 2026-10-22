@@ -12,7 +12,7 @@
 
 Что переписывается:
   hypr/theme.conf, waybar/colors/colors.css, swaync/colors/colors.css,
-  wofi/colors.css, alacritty/theme.toml, kitty/theme.conf,
+  wofi/colors.css, swayosd/style.css, alacritty/theme.toml, kitty/theme.conf,
   gtk-3.0/gtk.css, gtk-4.0/gtk.css, kdeglobals (только секции Colors:*),
   ~/.local/share/icons/ThemeAccent (Adwaita с папками в цвете акцента),
   fastfetch/config.jsonc,
@@ -177,6 +177,38 @@ def wofi(t):
             s2 = re.sub(r'^@import url\("[^"]*colors\.css"\);', imp, s, count=1, flags=re.M)
             if s2 != s:
                 f.write_text(s2)
+
+
+def swayosd(t):
+    """Стиль OSD громкости/яркости — стекло в цветах темы, как у wofi."""
+    light = t["mode"] == "light"
+    hi = "#ffffff" if light else t["fg_bright"]
+    css = f"""/* {HEADER} */
+/* {t['name']} */
+window#osd {{
+    border-radius: 999px;
+    border: 1px solid {rgba(hi, 0.18)};
+    background: {rgba(t['surface'] if not light else t['bg'], 0.55)};
+    box-shadow: inset 0 1px 0 {rgba(hi, 0.35)};
+}}
+window#osd #container {{ margin: 14px 18px; }}
+window#osd image, window#osd label {{ color: {t['fg_bright'] if not light else t['fg']}; }}
+window#osd progressbar:disabled, window#osd image:disabled {{ opacity: 0.45; }}
+window#osd progressbar, window#osd segmentedprogress {{
+    min-height: 6px; border-radius: 999px; background: transparent; border: none;
+}}
+window#osd trough, window#osd segment {{
+    min-height: inherit; border-radius: inherit; border: none;
+    background: {rgba(t['fg_dim'], 0.35)};
+}}
+window#osd progress, window#osd segment.active {{
+    min-height: inherit; border-radius: inherit; border: none;
+    background: {t['accent']};
+}}
+window#osd segment {{ margin-left: 8px; }}
+window#osd segment:first-child {{ margin-left: 0; }}
+"""
+    write(CFG / "swayosd/style.css", css)
 
 
 def alacritty(t):
@@ -492,6 +524,10 @@ def reload_apps():
     subprocess.Popen(["setsid", "-f", str(HOME / ".local/bin/waybar-autostart")],
                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     subprocess.run(["swaync-client", "--reload-css"], check=False, capture_output=True)
+    # swayosd читает стиль только при старте
+    if subprocess.run(["pkill", "-x", "swayosd-server"], capture_output=True).returncode == 0:
+        subprocess.Popen(["setsid", "-f", "swayosd-server"], stdin=subprocess.DEVNULL,
+                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
 # ------------------------------------------------------------------ main
@@ -513,7 +549,7 @@ def main(argv):
         return main([cur, "--quiet"])
 
     t = load(argv[0])
-    for step in (hypr, waybar, swaync, wofi, alacritty, kitty, gtk, icons, fastfetch, kdeglobals):
+    for step in (hypr, waybar, swaync, wofi, swayosd, alacritty, kitty, gtk, icons, fastfetch, kdeglobals):
         try:
             step(t)
         except Exception as e:  # одна сломанная цель не должна валить остальные

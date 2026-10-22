@@ -141,6 +141,8 @@ PKGS_BASE=(
     hyprlock hypridle
     # clipboard history (wofi-clipboard)
     cliphist
+    # volume / brightness OSD
+    swayosd
     # audio
     pipewire pipewire-pulse wireplumber pulseaudio-utils
     # network / bluetooth applets used by waybar

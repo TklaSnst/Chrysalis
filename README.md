@@ -22,13 +22,14 @@
 
 - **Hyprland** (≥ 0.54) with blur, "liquid glass" layer popups and bounce animations
 - **Theme system** — 7 JSON palettes; `theme-apply <id>` recolors *everything* at once:
-  Hyprland borders · waybar · swaync · wofi · alacritty · kitty · GTK 3/4 · Qt/KDE (`kdeglobals`) · fastfetch · folder icons (Adwaita recolored to the accent) · `gsettings` dark/light (Firefox & Chromium follow)
+  Hyprland borders · hyprlock · waybar · swaync · wofi · swayosd · alacritty · kitty · GTK 3/4 · Qt/KDE (`kdeglobals`) · fastfetch · folder icons (Adwaita recolored to the accent) · `gsettings` dark/light (Firefox & Chromium follow)
 - **Contrast boost** — `theme-apply --contrast 0..1` pulls backgrounds toward black/white without touching accents
 - **Wallpapers** — mesh-gradient wallpaper generated per theme, picker with thumbnails, animated circular transition (`swww`-style grow, no swww needed)
 - **Waybar** — workspaces, mpris, hidden drawers (battery / cpu / load, memory / temp), bluetooth, volume, backlight, network, tray, swaync control center
 - **Workspace overview** — `Super+Tab` shows every occupied workspace as a themed glass grid with thumbnails; pick one with mouse or keys, drag windows between workspaces
 - **Lock screen & idle** — `hyprlock` over a blurred screenshot in theme colors (`Super+L`); `hypridle` locks after 10 min, turns screens off after 11
 - **Clipboard history** — `cliphist` keeps text and images; `Super+Ctrl+V` opens it in wofi
+- **Volume / brightness OSD** — `swayosd` pill in theme colors on the media and brightness keys
 - **Window tabs** — Hyprland groups with a themed tab bar; split stays a split, new tabs only on demand (`hypr-new-tab`)
 - **wofi menus** — glass-styled main menu (`Super+Alt+Space`): apps · theme · wallpaper · speedtest · clipboard · power (lock / suspend / log out / reboot / power off, with confirmation)
 - **Speedtest** — LibreSpeed in a floating, theme-colored terminal
@@ -194,11 +195,12 @@ A default position for the transition can be stored in `~/.config/wallpapers/tra
 ```
 themes/<id>.json ──► theme-apply ──► hypr/theme.conf, waybar/colors/colors.css,
                         │            swaync/colors/colors.css, wofi/colors.css,
+                        │            swayosd/style.css,
                         │            alacritty/theme.toml, kitty/theme.conf,
                         │            gtk-3.0/gtk.css, gtk-4.0/gtk.css, kdeglobals,
                         │            fastfetch/config.jsonc, icons/ThemeAccent
                         └──► gsettings color-scheme / gtk-theme / icon-theme
-                             hyprctl reload · waybar restart · swaync reload · kitty SIGUSR1
+                             hyprctl reload · waybar restart · swaync reload · swayosd restart · kitty SIGUSR1
 ```
 
 Every target is a small function in `theme-apply`; to support a new app add one that writes its file and append it to the tuple in `main()`. Generated files carry a header and are git-ignored.
@@ -223,6 +225,7 @@ Installed automatically by `install.sh`:
 | `jq`, `socat` | `hypr-new-tab` (open app as a tab) |
 | `hyprlock`, `hypridle` | Lock screen, idle timeouts |
 | `cliphist` | Clipboard history |
+| `swayosd` | Volume / brightness OSD |
 | `playerctl`, `brightnessctl`, `pulseaudio-utils` | Media / hardware keys |
 | `pipewire` + `wireplumber` | Audio |
 | `network-manager-gnome`, `blueman` | Applets |
