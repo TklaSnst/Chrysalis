@@ -29,7 +29,7 @@
 - **Workspace overview** — `Super+Tab` shows every occupied workspace as a themed glass grid with thumbnails; pick one with mouse or keys, drag windows between workspaces
 - **Lock screen & idle** — `hyprlock` over a blurred screenshot in theme colors (`Super+L`); `hypridle` locks after 10 min, turns screens off after 11
 - **Window tabs** — Hyprland groups with a themed tab bar; split stays a split, new tabs only on demand (`hypr-new-tab`)
-- **wofi menus** — glass-styled main menu (`Super+Alt+Space`): apps · theme · wallpaper · speedtest
+- **wofi menus** — glass-styled main menu (`Super+Alt+Space`): apps · theme · wallpaper · speedtest · power (lock / suspend / log out / reboot / power off, with confirmation)
 - **Speedtest** — LibreSpeed in a floating, theme-colored terminal
 - **Auto-installer** — detects the distro, enables backports/PPA for Hyprland, links configs, generates wallpapers, applies the theme
 
@@ -142,7 +142,7 @@ A default position for the transition can be stored in `~/.config/wallpapers/tra
 | `Super + 1–0` / `Super + Shift + 1–0` | Switch / move to workspace |
 | `Super + Scroll` | Next / previous workspace |
 | `Super + Shift + C` | Reload Hyprland |
-| `Super + Shift + E` | Exit Hyprland |
+| `Super + Shift + E` | Power menu (lock / suspend / log out / reboot / power off) |
 | `Super + L` | Lock screen |
 | `Caps Lock` | Toggle keyboard layout (us / ru) |
 | 3-finger swipe ←→ / ↓ (+Alt) / ↑ (+Super) | Workspace / close / fullscreen |
@@ -173,6 +173,7 @@ A default position for the transition can be stored in `~/.config/wallpapers/tra
     ├── wofi-main-menu            # Super+Alt+Space
     ├── wofi-theme                # theme picker with palette swatches
     ├── wofi-wallpaper            # wallpaper grid with thumbnails
+    ├── wofi-power                # power menu (Super+Shift+E)
     ├── wallpaper-gen             # mesh gradient per theme (Pillow)
     ├── wallpaper-set             # set wallpaper with transition
     ├── wallpaper-transition      # GTK layer-shell circular reveal
