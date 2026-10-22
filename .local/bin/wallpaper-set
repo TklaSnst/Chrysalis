@@ -7,6 +7,8 @@
 #
 # Позицию по умолчанию можно задать в ~/.config/wallpapers/transition
 # (одно слово, например top-left). Без файла — случайный угол.
+#
+# Если выбрана тема «Из обоев», после смены обоев она пересчитывается.
 set -u
 img="${1:?usage: wallpaper-set <image> [--pos ...]}"
 shift
@@ -59,5 +61,10 @@ if [ "$anim" = 1 ]; then
     while [ "$i" -lt 100 ] && pgrep -f "bin/wallpaper-transition" >/dev/null; do
         i=$((i + 1)); sleep 0.05
     done
+fi
+
+themes="${XDG_CONFIG_HOME:-$HOME/.config}/themes"
+if [ "$(cat "$themes/current" 2>/dev/null)" = wallpaper ]; then
+    "$bin/theme-from-wallpaper" "$img"
 fi
 exit 0

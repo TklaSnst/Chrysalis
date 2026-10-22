@@ -1,0 +1,152 @@
+#!/usr/bin/env python3
+"""Тема из обоев: палитра картинки → ~/.config/themes/wallpaper.json → theme-apply.
+
+    theme-from-wallpaper [картинка] [--mode auto|dark|light] [--no-apply]
+
+Без картинки берутся текущие обои (~/.config/wallpapers/current).
+Пока выбрана тема «Из обоев», wallpaper-set перегенерирует её при каждой
+смене обоев. Режим auto: тёмная тема для тёмной картинки, светлая — для светлой.
+
+Как строится палитра: картинка квантуется до 24 цветов; акцент — самый
+насыщенный из заметных по площади, второй акцент — заметно другой по оттенку.
+Фоны — оттенок преобладающего цвета с низкой насыщенностью, а красный,
+зелёный и т.д. — фиксированные оттенки, слегка подтянутые к акценту,
+чтобы терминал и подсветка ошибок остались читаемыми.
+"""
+import colorsys
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+from PIL import Image
+
+HOME = Path.home()
+CFG = Path(os.environ.get("XDG_CONFIG_HOME", HOME / ".config"))
+OUT = CFG / "themes" / "wallpaper.json"
+CURRENT_WP = CFG / "wallpapers" / "current"
+
+# опорные оттенки (градусы) для смысловых цветов
+HUES = {"red": 355, "orange": 25, "yellow": 45, "green": 110,
+        "cyan": 180, "blue": 215, "magenta": 290}
+HARMONIZE = 0.15  # насколько смысловые цвета тянутся к оттенку акцента
+MAX_SHIFT = 12    # но не дальше, чем на столько градусов: красный остаётся красным
+
+
+def hexc(h, l, s):
+    r, g, b = colorsys.hls_to_rgb((h % 360) / 360, max(0, min(1, l)), max(0, min(1, s)))
+    return "#%02x%02x%02x" % (round(r * 255), round(g * 255), round(b * 255))
+
+
+def hue_dist(a, b):
+    d = abs(a - b) % 360
+    return min(d, 360 - d)
+
+
+def toward(h, target, k):
+    """Сдвинуть оттенок h к target на долю k по кратчайшей дуге."""
+    d = (target - h + 180) % 360 - 180
+    return (h + max(-MAX_SHIFT, min(MAX_SHIFT, d * k))) % 360
+
+
+def analyze(path):
+    im = Image.open(path).convert("RGB")
+    im.thumbnail((256, 256))
+    q = im.quantize(colors=24, method=Image.Quantize.MEDIANCUT)
+    pal = q.getpalette()
+    total = im.width * im.height
+    colors = []
+    for count, idx in q.getcolors():
+        r, g, b = (c / 255 for c in pal[idx * 3: idx * 3 + 3])
+        h, l, s = colorsys.rgb_to_hls(r, g, b)
+        colors.append({"share": count / total, "h": h * 360, "l": l, "s": s})
+    colors.sort(key=lambda c: -c["share"])
+    # средняя яркость (взвешенная по площади) — для выбора режима
+    lum = sum(c["l"] * c["share"] for c in colors)
+    return colors, lum
+
+
+def pick_accents(colors):
+    # «заметный и сочный»: насыщенность важнее площади, но совсем
+    # крошечные пятна и почти чёрные/белые цвета не годятся
+    def score(c):
+        if c["share"] < 0.004 or not 0.15 < c["l"] < 0.9:
+            return 0
+        return c["s"] ** 1.5 * c["share"] ** 0.3
+    ranked = sorted(colors, key=score, reverse=True)
+    accent = ranked[0] if score(ranked[0]) > 0 else None
+    if accent is None or accent["s"] < 0.12:
+        # монохромная картинка: оттенок преобладающего цвета
+        base = colors[0]
+        return base["h"], (base["h"] + 40) % 360, False
+    second = next((c for c in ranked[1:] if score(c) > 0 and hue_dist(c["h"], accent["h"]) > 35),
+                  None)
+    h2 = second["h"] if second else (accent["h"] + 40) % 360
+    return accent["h"], h2, True
+
+
+def build(path, mode):
+    colors, lum = analyze(path)
+    if mode == "auto":
+        mode = "light" if lum > 0.6 else "dark"
+    light = mode == "light"
+    acc_h, acc2_h, colorful = pick_accents(colors)
+    # фон — оттенок самого большого по площади цвета, едва подкрашенный
+    dom = colors[0]
+    bg_h = dom["h"] if dom["s"] > 0.08 else acc_h
+    tint = min(0.22, dom["s"] * 0.6 + 0.04)
+    acc_s = 0.65 if colorful else 0.35
+
+    if light:
+        L = {"bg": 0.95, "bg_alt": 0.91, "surface": 0.85, "surface2": 0.78,
+             "fg": 0.22, "fg_dim": 0.48, "fg_bright": 0.12}
+        acc_l, sem_l, sem_s = 0.42, 0.42, 0.62
+        ansi = {"black": 0.30, "bright_black": 0.45, "white": 0.72, "bright_white": 0.80}
+    else:
+        L = {"bg": 0.10, "bg_alt": 0.13, "surface": 0.20, "surface2": 0.27,
+             "fg": 0.87, "fg_dim": 0.62, "fg_bright": 0.96}
+        acc_l, sem_l, sem_s = 0.70, 0.68, 0.55
+        ansi = {"black": 0.18, "bright_black": 0.35, "white": 0.82, "bright_white": 0.95}
+
+    t = {"id": "wallpaper", "name": "Из обоев", "mode": mode, "dynamic": True,
+         "source": str(path)}
+    for k, l in L.items():
+        s = tint * (0.5 if k.startswith("fg") else 1)
+        t[k] = hexc(bg_h, l, s)
+    t["accent"] = hexc(acc_h, acc_l, acc_s)
+    t["accent2"] = hexc(acc2_h, acc_l, acc_s * 0.85)
+    for k, h in HUES.items():
+        t[k] = hexc(toward(h, acc_h, HARMONIZE), sem_l, sem_s)
+    for k, l in ansi.items():
+        t[k] = hexc(bg_h, l, tint)
+    return t
+
+
+def main(argv):
+    if argv[:1] in (["-h"], ["--help"]):
+        print(__doc__)
+        return 0
+    mode, apply, img = "auto", True, None
+    i = 0
+    while i < len(argv):
+        a = argv[i]
+        if a == "--mode":
+            mode = argv[i + 1]; i += 2; continue
+        if a == "--no-apply":
+            apply = False
+        else:
+            img = Path(a)
+        i += 1
+    img = (img or CURRENT_WP).resolve()
+    if not img.is_file():
+        sys.exit(f"нет картинки: {img}")
+    t = build(img, mode)
+    OUT.write_text(json.dumps(t, indent=2, ensure_ascii=False) + "\n")
+    if apply:
+        return subprocess.run([str(HOME / ".local/bin/theme-apply"), "wallpaper", "--quiet"]).returncode
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

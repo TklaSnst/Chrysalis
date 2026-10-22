@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Меню выбора темы в wofi: список тем с палитрой-свотчем, текущая помечена.
-После выбора вызывается theme-apply <id>."""
+После выбора вызывается theme-apply <id>.
+
+Первым пунктом идёт «Из обоев» (theme-from-wallpaper): её палитра каждый раз
+пересчитывается по текущим обоям, а пока она выбрана, тема следует за обоями."""
 import hashlib
 import json
 import os
@@ -44,12 +47,18 @@ def swatch(t) -> Path:
 def main():
     CACHE.mkdir(parents=True, exist_ok=True)
     cur = (THEMES / "current").read_text().strip() if (THEMES / "current").exists() else ""
+    # палитра «Из обоев» — по текущим обоям, чтобы свотч был честным
+    subprocess.run([str(HOME / ".local/bin/theme-from-wallpaper"), "--no-apply"],
+                   capture_output=True)
     themes = [json.load(open(p)) for p in sorted(THEMES.glob("*.json"))]
+    themes.sort(key=lambda t: not t.get("dynamic"))  # «Из обоев» — первой
     lines, ids = [], []
     for t in themes:
         tags = []
         if t["mode"] == "light":
             tags.append("светлая")
+        if t.get("dynamic"):
+            tags.append("следует за обоями")
         if t["id"] == cur:
             tags.append("текущая")
         suffix = f"  · {', '.join(tags)}" if tags else ""
@@ -64,7 +73,11 @@ def main():
         input="\n".join(lines) + "\n", capture_output=True, text=True)
     out = r.stdout.strip()
     if out.isdigit() and int(out) < len(ids):
-        subprocess.run([str(HOME / ".local/bin/theme-apply"), ids[int(out)]])
+        tid = ids[int(out)]
+        if themes[int(out)].get("dynamic"):
+            subprocess.run([str(HOME / ".local/bin/theme-from-wallpaper")])
+        else:
+            subprocess.run([str(HOME / ".local/bin/theme-apply"), tid])
     return 0
 
 

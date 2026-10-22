@@ -23,6 +23,7 @@
 - **Hyprland** (≥ 0.54) with blur, "liquid glass" layer popups and bounce animations
 - **Theme system** — 7 JSON palettes; `theme-apply <id>` recolors *everything* at once:
   Hyprland borders · hyprlock · waybar · swaync · wofi · swayosd · VS Code · Firefox (userChrome) · alacritty · kitty · GTK 3/4 · Qt/KDE (`kdeglobals`) · fastfetch · folder icons (Adwaita recolored to the accent) · `gsettings` dark/light (Firefox & Chromium follow)
+- **Theme from wallpaper** — `theme-from-wallpaper` builds a palette from the current wallpaper (dark or light picked automatically); choose **Из обоев** in the theme menu and the whole system follows every wallpaper change
 - **Contrast boost** — `theme-apply --contrast 0..1` pulls backgrounds toward black/white without touching accents
 - **Wallpapers** — mesh-gradient wallpaper generated per theme, picker with thumbnails, animated circular transition (`swww`-style grow, no swww needed)
 - **Waybar** — workspaces, mpris, hidden drawers (battery / cpu / load, memory / temp), bluetooth, volume, backlight, network, tray, swaync control center
@@ -79,6 +80,16 @@ theme-apply --contrast 0.3  # 0 = palette as-is, 1 = max contrast (default 0.6)
 | `tokyo-night` | Tokyo Night | dark |
 
 Or use the menu: `Super+Alt+Space` → **Тема оформления**.
+
+### Theme from wallpaper
+
+```bash
+theme-from-wallpaper                    # palette from the current wallpaper, then apply
+theme-from-wallpaper img.jpg --mode light
+theme-from-wallpaper --no-apply         # only write ~/.config/themes/wallpaper.json
+```
+
+The accent is the most saturated color that covers a noticeable part of the image, backgrounds are its dominant hue with low saturation, and red/green/yellow… stay recognizable (pulled toward the accent by at most 12°). While **Из обоев** is the current theme, `wallpaper-set` regenerates it after every wallpaper change; picking any other theme stops that.
 
 **VS Code / VSCodium** — `theme-apply` owns `workbench.colorTheme` (Default Dark/Light Modern) and `workbench.colorCustomizations` in `settings.json`; other settings stay untouched (a commented JSONC file is backed up to `settings.json.bak` once). Applies live.
 
@@ -185,6 +196,7 @@ A default position for the transition can be stored in `~/.config/wallpapers/tra
     ├── theme-apply               # the theme engine (python, no deps beyond stdlib + GTK)
     ├── wofi-main-menu            # Super+Alt+Space
     ├── wofi-theme                # theme picker with palette swatches
+    ├── theme-from-wallpaper      # palette from the wallpaper → "wallpaper" theme
     ├── wofi-wallpaper            # wallpaper grid with thumbnails
     ├── wofi-power                # power menu (Super+Shift+E)
     ├── wofi-clipboard            # clipboard history (Super+Ctrl+V)

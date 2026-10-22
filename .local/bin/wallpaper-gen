@@ -56,6 +56,8 @@ def main(argv):
     OUT.mkdir(parents=True, exist_ok=True)
     for p in sorted(THEMES.glob("*.json")):
         t = json.load(open(p))
+        if t.get("dynamic"):  # «Из обоев»: обои у неё и так есть
+            continue
         dst = OUT / f"theme-{t['id']}.png"
         if dst.exists() and not force:
             continue
