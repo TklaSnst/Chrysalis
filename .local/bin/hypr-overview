@@ -59,6 +59,7 @@ DRAG_THRESHOLD = 6
 OPEN_TIME = 0.24     # анимация появления, с
 CLOSE_TIME = 0.14    # и исчезновения
 STAGGER = 0.035      # задержка между карточками при появлении
+CARD_MARGIN = 4      # запас вокруг карточки в её кэше (под обводку)
 
 FALLBACK = {
     "base": "#1e1e2e", "surface": "#313244", "text": "#cdd6f4",
@@ -218,6 +219,8 @@ class Overview(Gtk.Window):
         self.thumbs = {}     # ws -> (x, y, w, h) миниатюры
         self.hits = []       # (x, y, w, h, client) иконки и окна для drag/close
         self.surfaces = {}
+        self.card_cache = {}  # ws -> (состояние, готовая картинка карточки)
+        self.drawn = False
         self.drag = None     # {"client", "x0", "y0", "x", "y", "active"}
         self.layout_size = None
         # анимация: t — прогресс 0..1, closing — уходим, on_done — что сделать в конце
@@ -255,6 +258,13 @@ class Overview(Gtk.Window):
         self.connect("key-press-event", self.on_key)
         self.connect("map", lambda *_: self.animate())
 
+        # Раскладку и миниатюры готовим до показа: если делать это в первом
+        # кадре, он занимает >100 мс и съедает начало анимации
+        scale = self.mon.get("scale") or 1
+        self.layout(round(self.mon["width"] / scale), round(self.mon["height"] / scale))
+        for i, ws in enumerate(self.ws):
+            self.card_surface(ws, i == self.sel, False)
+
     def animate(self):
         self.t0 = None
         if not self.ticking:
@@ -263,6 +273,10 @@ class Overview(Gtk.Window):
 
     def on_tick(self, widget, clock):
         now = clock.get_frame_time() / 1e6
+        if not self.drawn:
+            # часы анимации идут с первого реально показанного кадра
+            widget.queue_draw()
+            return GLib.SOURCE_CONTINUE
         if self.t0 is None:
             self.t0 = now
         dur = CLOSE_TIME if self.closing else OPEN_TIME + STAGGER * (len(self.ws) - 1)
@@ -325,6 +339,8 @@ class Overview(Gtk.Window):
             self.cards[ws] = (x, y, cw, ch)
             self.thumbs[ws] = (x + PAD, y + PAD, tw, th)
         self.surfaces = {ws: self.thumbnail(ws, tw, th) for ws in self.ws}
+        self.card_cache = {}
+        self.compute_hits()
 
     def columns(self):
         n = len(self.ws)
@@ -413,21 +429,22 @@ class Overview(Gtk.Window):
         cr.paint()
         cr.set_operator(cairo.OPERATOR_OVER)
 
-        self.hits = []
         target = self.card_at(self.drag["x"], self.drag["y"]) if self.drag and self.drag["active"] else None
         for i, ws in enumerate(self.ws):
             p = self.card_progress(i)
             if p <= 0:
                 continue
             x, y, cw, ch = self.cards[ws]
+            surf = self.card_surface(ws, i == self.sel, ws == self.hover or ws == target)
+            # кадр анимации — только масштаб и прозрачность готовой картинки
             scale = 0.9 + 0.1 * (p if self.closing else ease_out_back(p))
             cr.save()
             cr.translate(x + cw / 2, y + ch / 2)
             cr.scale(scale, scale)
             cr.translate(-(x + cw / 2), -(y + ch / 2))
-            cr.push_group()
-            self.draw_card(cr, ws, i == self.sel, ws == self.hover or ws == target)
-            cr.pop_group_to_source()
+            cr.set_source_surface(surf, x - CARD_MARGIN, y - CARD_MARGIN)
+            if scale != 1.0:
+                cr.get_source().set_filter(cairo.FILTER_FAST)
             cr.paint_with_alpha(min(1.0, p * 1.5))
             cr.restore()
 
@@ -436,7 +453,44 @@ class Overview(Gtk.Window):
             if pb is not None:
                 Gdk.cairo_set_source_pixbuf(cr, pb, self.drag["x"] - 24, self.drag["y"] - 24)
                 cr.paint_with_alpha(0.9)
+        self.drawn = True
         return True
+
+    def card_surface(self, ws, selected, hovered):
+        """Карточка, нарисованная один раз; перерисовывается, только когда
+        меняется её вид (выбор, наведение, перетаскиваемое окно)."""
+        drag = self.drag["client"]["address"] if self.drag and self.drag["active"] else None
+        state = (selected, hovered, drag)
+        cached = self.card_cache.get(ws)
+        if cached and cached[0] == state:
+            return cached[1]
+        x, y, cw, ch = self.cards[ws]
+        surf = cairo.ImageSurface(cairo.FORMAT_ARGB32, cw + 2 * CARD_MARGIN, ch + 2 * CARD_MARGIN)
+        cr = cairo.Context(surf)
+        cr.translate(CARD_MARGIN - x, CARD_MARGIN - y)
+        self.draw_card(cr, ws, selected, hovered)
+        self.card_cache[ws] = (state, surf)
+        return surf
+
+    def compute_hits(self):
+        """Где лежат иконки окон и окна на схемах — цели для drag и закрытия."""
+        self.hits = []
+        for ws in self.ws:
+            tx, ty, tw, th = self.thumbs[ws]
+            wins = [c for c in self.clients if c["workspace"]["id"] == ws]
+            ix = tx + tw - ICON
+            iy = ty + th + (LABEL_H + PAD - ICON) / 2
+            for c in reversed(wins):
+                if ix < tx + 40:
+                    break
+                self.hits.append((ix, iy, ICON, ICON, c))
+                ix -= ICON + 6
+            if self.surfaces[ws][1]:  # схема: окна нарисованы прямоугольниками
+                sx, sy = tw / self.mon["width"], th / self.mon["height"]
+                for c in wins:
+                    self.hits.append((tx + (c["at"][0] - self.mon["x"]) * sx,
+                                      ty + (c["at"][1] - self.mon["y"]) * sy,
+                                      c["size"][0] * sx, c["size"][1] * sy, c))
 
     def draw_card(self, cr, ws, selected, hovered):
         x, y, cw, ch = self.cards[ws]
@@ -482,7 +536,6 @@ class Overview(Gtk.Window):
             if pb is not None:
                 Gdk.cairo_set_source_pixbuf(cr, pb, ix, iy)
                 cr.paint_with_alpha(0.35 if self.dragging(c) else 1.0)
-            self.hits.append((ix, iy, ICON, ICON, c))
             ix -= ICON + 6
         if not wins:
             layout.set_font_description(Pango.FontDescription("JetBrains Mono 10"))
@@ -491,15 +544,6 @@ class Overview(Gtk.Window):
             cr.set_source_rgba(*self.c["text-dim"])
             cr.move_to(tx + tw - pw, ty + th + (LABEL_H + PAD - ph) / 2)
             PangoCairo.show_layout(cr, layout)
-
-        # окна на схеме — тоже цели для drag
-        surf_schematic = self.surfaces[ws][1]
-        if surf_schematic:
-            sx, sy = tw / self.mon["width"], th / self.mon["height"]
-            for c in wins:
-                self.hits.append((tx + (c["at"][0] - self.mon["x"]) * sx,
-                                  ty + (c["at"][1] - self.mon["y"]) * sy,
-                                  c["size"][0] * sx, c["size"][1] * sy, c))
 
     def dragging(self, client):
         return bool(self.drag and self.drag["active"] and self.drag["client"] is client)
@@ -576,6 +620,8 @@ class Overview(Gtk.Window):
             if ws in self.thumbs:
                 _, _, tw, th = self.thumbs[ws]
                 self.surfaces[ws] = (self.schematic(ws, tw, th), True)
+                self.card_cache.pop(ws, None)
+        self.compute_hits()
         self.area.queue_draw()
 
     # ── клавиатура ──
