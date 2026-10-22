@@ -8,6 +8,7 @@ n="$(printf '%s\n' \
     "󰏘   Тема оформления" \
     "󰸉   Обои" \
     "󰓅   Speedtest" \
+    "󰅌   Буфер обмена" \
     "󰐥   Питание" \
     | wofi --dmenu --conf "$cfg/main" --style "$cfg/style.css" --prompt "Меню" \
            --define dmenu-print_line_num=true)"
@@ -17,5 +18,6 @@ case "$n" in
     1) exec "$bin/wofi-theme" ;;
     2) exec "$bin/wofi-wallpaper" ;;
     3) exec "$bin/speedtest-menu" ;;
-    4) exec "$bin/wofi-power" ;;
+    4) exec "$bin/wofi-clipboard" ;;
+    5) exec "$bin/wofi-power" ;;
 esac

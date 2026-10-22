@@ -1,0 +1,19 @@
+#!/bin/sh
+# История буфера обмена (Super+Ctrl+V): выбранная запись снова копируется,
+# дальше её вставляют обычным Ctrl+V. Историю пишет cliphist —
+# его слушатели wl-paste --watch запускаются в hyprland.conf.
+cfg="${XDG_CONFIG_HOME:-$HOME/.config}/wofi"
+wipe="󰆴   Очистить историю"
+
+sel="$( { printf '%s\n' "$wipe"; cliphist list; } |
+    wofi --dmenu --conf "$cfg/main" --style "$cfg/style.css" \
+         --prompt "Буфер обмена" --width 720 --height 480)"
+
+case "$sel" in
+    "") exit 0 ;;
+    "$wipe")
+        cliphist wipe
+        notify-send -a "Буфер обмена" -i edit-clear-history "История очищена"
+        ;;
+    *) printf '%s' "$sel" | cliphist decode | wl-copy ;;
+esac

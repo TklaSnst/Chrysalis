@@ -139,6 +139,8 @@ PKGS_BASE=(
     jq socat
     # lock screen & idle
     hyprlock hypridle
+    # clipboard history (wofi-clipboard)
+    cliphist
     # audio
     pipewire pipewire-pulse wireplumber pulseaudio-utils
     # network / bluetooth applets used by waybar
