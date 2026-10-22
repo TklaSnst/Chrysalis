@@ -143,6 +143,8 @@ PKGS_BASE=(
     cliphist
     # volume / brightness OSD
     swayosd
+    # screen recording (screen-record)
+    wf-recorder
     # audio
     pipewire pipewire-pulse wireplumber pulseaudio-utils
     # network / bluetooth applets used by waybar

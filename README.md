@@ -31,8 +31,9 @@
 - **Clipboard history** — `cliphist` keeps text and images; `Super+Ctrl+V` opens it in wofi
 - **Volume / brightness OSD** — `swayosd` pill in theme colors on the media and brightness keys
 - **Screenshots** — area / monitor / all screens saved to `~/Pictures/Screenshots` and copied; the notification has *Edit* (swappy annotations) and *Folder* buttons
+- **Screen recording** — `wf-recorder` for an area or the monitor (optionally with system audio); a pulsing timer in waybar, click it to stop
 - **Window tabs** — Hyprland groups with a themed tab bar; split stays a split, new tabs only on demand (`hypr-new-tab`)
-- **wofi menus** — glass-styled main menu (`Super+Alt+Space`): apps · theme · wallpaper · speedtest · clipboard · power (lock / suspend / log out / reboot / power off, with confirmation)
+- **wofi menus** — glass-styled main menu (`Super+Alt+Space`): apps · theme · wallpaper · speedtest · clipboard · screen recording · power (lock / suspend / log out / reboot / power off, with confirmation)
 - **Speedtest** — LibreSpeed in a floating, theme-colored terminal
 - **Auto-installer** — detects the distro, enables backports/PPA for Hyprland, links configs, generates wallpapers, applies the theme
 
@@ -149,6 +150,8 @@ A default position for the transition can be stored in `~/.config/wallpapers/tra
 | `Super + Shift + E` | Power menu (lock / suspend / log out / reboot / power off) |
 | `Super + L` | Lock screen |
 | `Super + Ctrl + V` | Clipboard history |
+| `Super + Alt + R` | Record an area (press again to stop) |
+| `Super + Alt + Shift + R` | Record the monitor with system audio |
 | `Caps Lock` | Toggle keyboard layout (us / ru) |
 | 3-finger swipe ←→ / ↓ (+Alt) / ↑ (+Super) | Workspace / close / fullscreen |
 
@@ -183,6 +186,7 @@ A default position for the transition can be stored in `~/.config/wallpapers/tra
     ├── wofi-clipboard            # clipboard history (Super+Ctrl+V)
     ├── screenshot                # area / output / screen / edit + notification
     ├── notify-action             # notification with buttons (notify-send -A replacement)
+    ├── screen-record             # wf-recorder toggle + waybar status
     ├── wallpaper-gen             # mesh gradient per theme (Pillow)
     ├── wallpaper-set             # set wallpaper with transition
     ├── wallpaper-transition      # GTK layer-shell circular reveal
@@ -231,6 +235,7 @@ Installed automatically by `install.sh`:
 | `hyprlock`, `hypridle` | Lock screen, idle timeouts |
 | `cliphist` | Clipboard history |
 | `swayosd` | Volume / brightness OSD |
+| `wf-recorder` | Screen recording |
 | `playerctl`, `brightnessctl`, `pulseaudio-utils` | Media / hardware keys |
 | `pipewire` + `wireplumber` | Audio |
 | `network-manager-gnome`, `blueman` | Applets |

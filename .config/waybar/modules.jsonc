@@ -195,6 +195,16 @@
         }
     },
 
+    // Индикатор записи экрана: виден только пока идёт запись (screen-record),
+    // клик — остановить. signal 8 — мгновенное обновление при старте/стопе
+    "custom/recording": {
+        "exec": "~/.local/bin/screen-record --status",
+        "return-type": "json",
+        "interval": 1,
+        "signal": 8,
+        "on-click": "~/.local/bin/screen-record stop"
+    },
+
     "custom/start": {
         "format": "",
         "on-click": "~/.config/rofi/bin/drun &"

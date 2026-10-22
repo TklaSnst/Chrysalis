@@ -1,0 +1,116 @@
+#!/bin/sh
+# Запись экрана через wf-recorder. Пока идёт запись, в waybar горит
+# индикатор с таймером (custom/recording), клик по нему — остановить.
+#
+#   screen-record [area|output] [--audio]   начать; если запись уже идёт — остановить
+#   screen-record stop                      остановить
+#   screen-record menu                      выбор режима в wofi
+#   screen-record --status                  JSON для waybar
+#
+# --audio пишет звук системы (монитор выхода по умолчанию), не микрофон.
+# Файлы — ~/Videos/Recordings/<дата>.mp4
+
+run="${XDG_RUNTIME_DIR:-/tmp}/screen-record"
+dir="$(xdg-user-dir VIDEOS 2>/dev/null || echo "$HOME/Videos")/Recordings"
+bin="$HOME/.local/bin"
+
+running() {
+    [ -f "$run.pid" ] && kill -0 "$(cat "$run.pid")" 2>/dev/null
+}
+
+refresh_bar() {
+    pkill -RTMIN+8 -x waybar 2>/dev/null
+}
+
+color() {
+    sed -n "s/^@define-color $1 *#\([0-9a-fA-F]\{6\}\);.*/\1/p" \
+        "${XDG_CONFIG_HOME:-$HOME/.config}/wofi/colors.css" 2>/dev/null
+}
+
+status() {
+    if ! running; then
+        echo '{"text": ""}'
+        return
+    fi
+    s=$(( $(date +%s) - $(cat "$run.start") ))
+    printf '{"text": "󰑊 %02d:%02d", "tooltip": "Идёт запись — клик, чтобы остановить", "class": "recording"}\n' \
+        $((s / 60)) $((s % 60))
+}
+
+stop() {
+    running || return 1
+    pid=$(cat "$run.pid")
+    # SIGINT — wf-recorder корректно допишет и закроет файл
+    kill -INT "$pid"
+    i=0
+    while kill -0 "$pid" 2>/dev/null && [ $i -lt 50 ]; do sleep 0.1; i=$((i + 1)); done
+    file=$(cat "$run.file")
+    rm -f "$run.pid" "$run.start" "$run.file"
+    refresh_bar
+    action="$("$bin/notify-action" -a "Запись экрана" -i video-x-generic \
+        -A open="Открыть" -A folder="Папка" \
+        "Запись сохранена" "$(basename "$file")")"
+    case "$action" in
+        open)   exec xdg-open "$file" ;;
+        folder) exec xdg-open "$dir" ;;
+    esac
+}
+
+start() {
+    mode="$1"; audio="$2"
+    set --
+    case "$mode" in
+        area)
+            accent="$(color accent)"; base="$(color base)"
+            geom="$(slurp -d -w 2 -c "${accent:-88c0d0}ff" -b "${base:-000000}66")" || exit 0
+            set -- -g "$geom" ;;
+        output)
+            set -- -o "$(hyprctl monitors -j | jq -r '.[] | select(.focused) | .name')" ;;
+        *)
+            sed -n '2,12s/^# \{0,1\}//p' "$0"; exit 1 ;;
+    esac
+    if [ "$audio" = "--audio" ]; then
+        set -- "$@" "--audio=$(pactl get-default-sink).monitor"
+    fi
+
+    mkdir -p "$dir"
+    file="$dir/$(date +%Y-%m-%d_%H-%M-%S).mp4"
+    wf-recorder "$@" -f "$file" >/dev/null 2>"$run.log" &
+    echo $! > "$run.pid"
+    date +%s > "$run.start"
+    echo "$file" > "$run.file"
+
+    sleep 0.5
+    if ! running; then
+        rm -f "$run.pid" "$run.start" "$run.file"
+        notify-send -a "Запись экрана" -u critical -i dialog-error \
+            "Не удалось начать запись" "$(tail -n 3 "$run.log")"
+        exit 1
+    fi
+    refresh_bar
+}
+
+menu() {
+    cfg="${XDG_CONFIG_HOME:-$HOME/.config}/wofi"
+    if running; then
+        set -- "󰙧   Остановить запись"
+    else
+        set -- "󰩭   Область" "󰍹   Монитор" "󰕾   Монитор со звуком"
+    fi
+    n="$(printf '%s\n' "$@" | wofi --dmenu --conf "$cfg/main" --style "$cfg/style.css" \
+        --prompt "Запись экрана" --define dmenu-print_line_num=true)"
+    [ -n "$n" ] || exit 0
+    if running; then stop; exit; fi
+    case "$n" in
+        0) start area ;;
+        1) start output ;;
+        2) start output --audio ;;
+    esac
+}
+
+case "${1:-area}" in
+    --status) status ;;
+    stop)     stop ;;
+    menu)     menu ;;
+    *)        running && { stop; exit; }; start "${1:-area}" "$2" ;;
+esac

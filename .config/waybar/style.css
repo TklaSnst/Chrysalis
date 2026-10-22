@@ -120,6 +120,18 @@
     color: @blue;
 }
 
+/* индикатор записи экрана — пульсирует красным */
+@keyframes rec-pulse {
+    from { opacity: 1; }
+    to   { opacity: 0.45; }
+}
+
+#custom-recording {
+    color: @red;
+    margin-right: 8px;
+    animation: rec-pulse 1s ease-in-out infinite alternate;
+}
+
 #workspaces button {
     color: @workspace-fg;
     font-size: 14px;
