@@ -24,6 +24,7 @@
 - **Theme system** — 7 JSON palettes; `theme-apply <id>` recolors *everything* at once:
   Hyprland borders · hyprlock · waybar · swaync · wofi · swayosd · VS Code · Firefox (userChrome) · alacritty · kitty · GTK 3/4 · Qt/KDE (`kdeglobals`) · fastfetch · folder icons (Adwaita recolored to the accent) · `gsettings` dark/light (Firefox & Chromium follow)
 - **Theme from wallpaper** — `theme-from-wallpaper` builds a palette from the current wallpaper (dark or light picked automatically); choose **Из обоев** in the theme menu and the whole system follows every wallpaper change
+- **Floating utilities** — pavucontrol, network editor, blueman, polkit, swappy and Open/Save dialogs open centered as floating windows; Picture-in-Picture video sticks to a corner on every workspace
 - **Window opacity** — `Super+O` menu (100…60 %): translucent windows over the blurred wallpaper; fullscreen windows, video players, image viewers and Resolve stay opaque
 - **Contrast boost** — `theme-apply --contrast 0..1` pulls backgrounds toward black/white without touching accents
 - **Wallpapers** — mesh-gradient wallpaper generated per theme, picker with thumbnails, animated circular transition (`swww`-style grow, no swww needed)
