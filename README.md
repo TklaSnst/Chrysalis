@@ -1,18 +1,50 @@
+<div align="center">
+
 # Chrysalis
 
-> A clean, minimal Hyprland desktop for Debian-based systems — install Debian/Ubuntu, run one script, get a polished setup.
+**A clean, glassy Hyprland desktop for Debian and Ubuntu — run one script, get a polished setup that recolors itself from your wallpaper.**
 
-![Terminal with fastfetch — Gruvbox Dark](screenshots/terminal.png)
-![Main menu — Tokyo Night](screenshots/tokyo-menu.png)
-![Theme picker](screenshots/themes.png)
-![Wallpaper picker](screenshots/wallpapers.png)
+[![English](https://img.shields.io/badge/English-selected-8fbcbb?style=for-the-badge&labelColor=2e3440)](README.md)
+[![Русский](https://img.shields.io/badge/%D0%A0%D1%83%D1%81%D1%81%D0%BA%D0%B8%D0%B9-%D1%87%D0%B8%D1%82%D0%B0%D1%82%D1%8C-5e81ac?style=for-the-badge&labelColor=2e3440)](README.ru.md)
+
+![Hyprland](https://img.shields.io/badge/Hyprland-%E2%89%A50.54-88c0d0?style=flat-square&labelColor=2e3440)
+![Debian](https://img.shields.io/badge/Debian-13-a3be8c?style=flat-square&labelColor=2e3440)
+![Ubuntu](https://img.shields.io/badge/Ubuntu-24.04%2B-ebcb8b?style=flat-square&labelColor=2e3440)
+
+</div>
+
+<table>
+  <tr>
+    <td><img src="screenshots/wallpaper-theme-warm.png" alt="Theme generated from a warm wallpaper"></td>
+    <td><img src="screenshots/wallpaper-theme-cool.png" alt="Theme generated from a cool wallpaper"></td>
+  </tr>
+  <tr>
+    <td align="center"><sub>Same desktop, two wallpapers — every color comes from the picture</sub></td>
+    <td align="center"><sub>Terminal, btop, bar, borders and menus follow along</sub></td>
+  </tr>
+</table>
+
+### **[Features](#features) · [Quick Start](#quick-start) · [Themes](#themes) · [Keybindings](#keybindings) · [Structure](#structure)**
+
+---
+
+## Screenshots
+
+| Workspace overview — `Super+Tab` | Main menu — `Super+Alt+Space` |
+|:---:|:---:|
+| ![Workspace overview](screenshots/overview.png) | ![Main menu](screenshots/menu.png) |
+| **Theme picker** — «Из обоев» follows the wallpaper | **Power menu** — `Super+Shift+E` |
+| ![Theme picker](screenshots/themes.png) | ![Power menu](screenshots/power.png) |
+| **Window opacity** — `Super+O` | **Volume / brightness OSD** |
+| ![Window opacity menu](screenshots/opacity.png) | ![Volume OSD](screenshots/osd.png) |
 
 <details>
 <summary>More screenshots</summary>
 
-![App launcher](screenshots/launcher.png)
-![Main menu — Gruvbox Dark](screenshots/menu.png)
+![Terminal with fastfetch — Gruvbox Dark](screenshots/terminal.png)
 ![Terminal — Tokyo Night](screenshots/tokyo-terminal.png)
+![App launcher](screenshots/launcher.png)
+![Wallpaper picker](screenshots/wallpapers.png)
 
 </details>
 
@@ -20,24 +52,30 @@
 
 ## Features
 
+### Look & themes
 - **Hyprland** (≥ 0.54) with blur, "liquid glass" layer popups and bounce animations
 - **Theme system** — 7 JSON palettes; `theme-apply <id>` recolors *everything* at once:
-  Hyprland borders · hyprlock · waybar · swaync · wofi · swayosd · VS Code · Firefox (userChrome) · btop · cava · alacritty · kitty · GTK 3/4 · Qt/KDE (`kdeglobals`) · fastfetch · folder icons (Adwaita recolored to the accent) · `gsettings` dark/light (Firefox & Chromium follow)
+  Hyprland borders · hyprlock · waybar · swaync · wofi · swayosd · alacritty · kitty · Powerlevel10k · GTK 3/4 · Qt/KDE (`kdeglobals`) · VS Code · Firefox (userChrome) · btop · cava · fastfetch · folder icons (Adwaita recolored to the accent) · `gsettings` dark/light (Firefox & Chromium follow)
 - **Theme from wallpaper** — `theme-from-wallpaper` builds a palette from the current wallpaper (dark or light picked automatically); choose **Из обоев** in the theme menu and the whole system follows every wallpaper change
-- **Floating utilities** — pavucontrol, network editor, blueman, polkit, swappy and Open/Save dialogs open centered as floating windows; Picture-in-Picture video sticks to a corner on every workspace
-- **Prompt in theme colors** — Powerlevel10k's fixed 256-color codes are remapped to the 16 terminal colors, so the prompt recolors with the theme (`~/.p10k.zsh` stays untouched)
-- **Window opacity** — `Super+O` menu (100…60 %): translucent windows over the blurred wallpaper; fullscreen windows, video players, image viewers and Resolve stay opaque
+- **Window opacity** — `Super+O` (100…60 %): translucent windows over the blurred wallpaper; fullscreen windows, video players, image viewers and Resolve stay opaque
 - **Contrast boost** — `theme-apply --contrast 0..1` pulls backgrounds toward black/white without touching accents
+- **Prompt in theme colors** — Powerlevel10k's fixed 256-color codes are remapped to the 16 terminal colors (`~/.p10k.zsh` stays untouched)
 - **Wallpapers** — mesh-gradient wallpaper generated per theme, picker with thumbnails, animated circular transition (`swww`-style grow, no swww needed)
-- **Waybar** — workspaces, mpris, hidden drawers (battery / cpu / load, memory / temp), bluetooth, volume, backlight, network, tray, swaync control center
-- **Workspace overview** — `Super+Tab` shows every occupied workspace as a themed glass grid with thumbnails; pick one with mouse or keys, drag windows between workspaces
+
+### Desktop
+- **Workspace overview** — `Super+Tab` shows every occupied workspace as a glass grid with thumbnails; pick one with mouse or keys, drag an app icon to move its window, middle-click to close it
+- **Waybar** — workspaces, mpris, hidden drawers (battery / cpu / load, memory / temp), bluetooth, volume, backlight, network, tray, swaync control center, screen-recording timer
+- **Window tabs** — Hyprland groups with a themed tab bar; split stays a split, new tabs only on demand (`hypr-new-tab`)
+- **Floating utilities** — pavucontrol, network editor, blueman, polkit, swappy and Open/Save dialogs open centered and floating; Picture-in-Picture video sticks to a corner on every workspace
 - **Lock screen & idle** — `hyprlock` over a blurred screenshot in theme colors (`Super+L`); `hypridle` locks after 10 min, turns screens off after 11
-- **Clipboard history** — `cliphist` keeps text and images; `Super+Ctrl+V` opens it in wofi
 - **Volume / brightness OSD** — `swayosd` pill in theme colors on the media and brightness keys
+
+### Tools
+- **wofi menus** — glass main menu (`Super+Alt+Space`): apps · theme · wallpaper · window opacity · speedtest · clipboard · screen recording · power
+- **Power menu** — lock / suspend / log out / reboot / power off, destructive actions ask first
+- **Clipboard history** — `cliphist` keeps text and images; `Super+Ctrl+V`
 - **Screenshots** — area / monitor / all screens saved to `~/Pictures/Screenshots` and copied; the notification has *Edit* (swappy annotations) and *Folder* buttons
 - **Screen recording** — `wf-recorder` for an area or the monitor (optionally with system audio); a pulsing timer in waybar, click it to stop
-- **Window tabs** — Hyprland groups with a themed tab bar; split stays a split, new tabs only on demand (`hypr-new-tab`)
-- **wofi menus** — glass-styled main menu (`Super+Alt+Space`): apps · theme · wallpaper · window opacity · speedtest · clipboard · screen recording · power (lock / suspend / log out / reboot / power off, with confirmation)
 - **Speedtest** — LibreSpeed in a floating, theme-colored terminal
 - **Auto-installer** — detects the distro, enables backports/PPA for Hyprland, links configs, generates wallpapers, applies the theme
 
@@ -57,7 +95,7 @@ Use `--dry-run` to preview what will be installed without making changes:
 bash install.sh --dry-run
 ```
 
-**Supported:** Debian 13 (trixie, Hyprland from backports), Ubuntu 24.04+ (Hyprland PPA), any `apt`-based distro that ships Hyprland ≥ 0.54.
+**Supported:** Debian 13 (trixie, Hyprland from backports), Ubuntu 24.04+ (Hyprland PPA; tested on 26.04), any `apt`-based distro that ships Hyprland ≥ 0.54.
 
 The installer **symlinks** `.config/*` and `.local/bin/*` into your home, so `git pull` updates the live config. Existing directories are backed up as `*.bak`.
 
@@ -82,6 +120,7 @@ theme-apply --opacity 0.9   # window opacity 0.3..1, only reloads Hyprland
 | `nord` | Nord | dark |
 | `rose-pine` | Rosé Pine | dark |
 | `tokyo-night` | Tokyo Night | dark |
+| `wallpaper` | Из обоев (from the wallpaper) | auto |
 
 Or use the menu: `Super+Alt+Space` → **Тема оформления**.
 
@@ -95,9 +134,15 @@ theme-from-wallpaper --no-apply         # only write ~/.config/themes/wallpaper.
 
 The accent is the most saturated color that covers a noticeable part of the image, backgrounds are its dominant hue with low saturation, and red/green/yellow… stay recognizable (pulled toward the accent by at most 12°). While **Из обоев** is the current theme, `wallpaper-set` regenerates it after every wallpaper change; picking any other theme stops that.
 
+### Apps outside the desktop
+
 **VS Code / VSCodium** — `theme-apply` owns `workbench.colorTheme` (Default Dark/Light Modern) and `workbench.colorCustomizations` in `settings.json`; other settings stay untouched (a commented JSONC file is backed up to `settings.json.bak` once). Applies live.
 
 **Firefox** — writes `chrome/chrysalis.css` into every profile (regular, snap, flatpak), imports it from `userChrome.css` without replacing your own rules and enables `toolkit.legacyUserProfileCustomizations.stylesheets` in `user.js`. Takes effect after restarting Firefox.
+
+**btop / cava** — a `chrysalis` theme for each, selected in their configs; running instances reload on `SIGUSR2`.
+
+**Powerlevel10k** — `install.sh` sources `.config/zsh/p10k-chrysalis.zsh` after `~/.p10k.zsh`; new shells pick up the colors (`exec zsh` in open ones).
 
 ### Adding a theme
 
@@ -138,13 +183,20 @@ A default position for the transition can be stored in `~/.config/wallpapers/tra
 |-----|--------|
 | `Super + Return` | Terminal (alacritty) |
 | `Super + Space` | App launcher (wofi drun) |
-| `Super + Alt + Space` | Main menu (apps / theme / wallpaper / speedtest) |
+| `Super + Alt + Space` | Main menu |
+| `Super + Tab` | Workspace overview (click / arrows / `1–0` to switch, drag an icon to move a window, middle-click to close it) |
 | `Super + B` | Browser (firefox) |
 | `Super + C` | VS Code |
 | `Super + V` | DaVinci Resolve |
 | `Super + P` | Screenshot area → file + clipboard |
 | `Print` / `Shift + Print` / `Ctrl + Print` | Screenshot area / all screens / monitor → file + clipboard |
 | `Alt + Print` / `Super + Ctrl + P` | Area straight into the swappy editor |
+| `Super + Alt + R` | Record an area (press again to stop) |
+| `Super + Alt + Shift + R` | Record the monitor with system audio |
+| `Super + Ctrl + V` | Clipboard history |
+| `Super + O` | Window opacity menu |
+| `Super + L` | Lock screen |
+| `Super + Shift + E` | Power menu |
 | `Super + Shift + Q` | Close window |
 | `Super + Shift + V` | Toggle floating |
 | `Super + Shift + F11` | Fullscreen |
@@ -162,16 +214,9 @@ A default position for the transition can be stored in `~/.config/wallpapers/tra
 | `Super + S` / `Super + Shift + S` | Scratchpad show / move to |
 | `Super + R` | Resize submap (arrows, `Esc` to leave) |
 | `Super + Arrows` / `Super + Shift + Arrows` | Focus / move window |
-| `Super + Tab` | Workspace overview (click / arrows / `1–0` to switch, drag an icon to move a window, middle-click to close it) |
 | `Super + 1–0` / `Super + Shift + 1–0` | Switch / move to workspace |
 | `Super + Scroll` | Next / previous workspace |
 | `Super + Shift + C` | Reload Hyprland |
-| `Super + Shift + E` | Power menu (lock / suspend / log out / reboot / power off) |
-| `Super + L` | Lock screen |
-| `Super + Ctrl + V` | Clipboard history |
-| `Super + O` | Window opacity menu |
-| `Super + Alt + R` | Record an area (press again to stop) |
-| `Super + Alt + Shift + R` | Record the monitor with system audio |
 | `Caps Lock` | Toggle keyboard layout (us / ru) |
 | 3-finger swipe ←→ / ↓ (+Alt) / ↑ (+Super) | Workspace / close / fullscreen |
 
@@ -197,26 +242,26 @@ A default position for the transition can be stored in `~/.config/wallpapers/tra
 │   ├── zsh/p10k-chrysalis.zsh    # Powerlevel10k colors → terminal palette
 │   ├── rofi/                     # rofi drun launcher used by the waybar start button
 │   ├── themes/*.json             # color palettes
-│   └── wallpapers/               # default wallpaper; theme-*.png generated here
+│   └── wallpapers/               # bundled wallpapers; theme-*.png generated here
 └── .local/bin/
     ├── theme-apply               # the theme engine (python, no deps beyond stdlib + GTK)
+    ├── theme-from-wallpaper      # palette from the wallpaper → "wallpaper" theme
     ├── wofi-main-menu            # Super+Alt+Space
     ├── wofi-theme                # theme picker with palette swatches
-    ├── theme-from-wallpaper      # palette from the wallpaper → "wallpaper" theme
     ├── wofi-wallpaper            # wallpaper grid with thumbnails
     ├── wofi-power                # power menu (Super+Shift+E)
     ├── wofi-opacity              # window opacity menu (Super+O)
     ├── wofi-clipboard            # clipboard history (Super+Ctrl+V)
+    ├── hypr-overview             # Super+Tab workspace overview (GTK layer-shell)
+    ├── hypr-overview-snap        # caches workspace thumbnails for the overview
+    ├── hypr-new-tab              # open an app as a new tab in the current group
     ├── screenshot                # area / output / screen / edit + notification
-    ├── notify-action             # notification with buttons (notify-send -A replacement)
     ├── screen-record             # wf-recorder toggle + waybar status
+    ├── notify-action             # notification with buttons (notify-send -A replacement)
     ├── wallpaper-gen             # mesh gradient per theme (Pillow)
     ├── wallpaper-set             # set wallpaper with transition
     ├── wallpaper-transition      # GTK layer-shell circular reveal
     ├── speedtest-menu / -run     # LibreSpeed in a floating alacritty
-    ├── hypr-new-tab              # open an app as a new tab in the current group
-    ├── hypr-overview             # Super+Tab workspace overview (GTK layer-shell)
-    ├── hypr-overview-snap        # caches workspace thumbnails for the overview
     └── waybar-autostart          # retry wrapper for waybar at session start
 ```
 
@@ -235,6 +280,8 @@ themes/<id>.json ──► theme-apply ──► hypr/theme.conf, waybar/colors/
                         │            btop/themes/chrysalis.theme, cava/themes/chrysalis
                         └──► gsettings color-scheme / gtk-theme / icon-theme
                              hyprctl reload · waybar restart · swaync reload · swayosd restart · kitty SIGUSR1 · btop/cava SIGUSR2
+
+wallpaper ──► theme-from-wallpaper ──► themes/wallpaper.json ──► theme-apply wallpaper
 ```
 
 Every target is a small function in `theme-apply`; to support a new app add one that writes its file and append it to the tuple in `main()`. Generated files carry a header and are git-ignored.
@@ -256,7 +303,7 @@ Installed automatically by `install.sh`:
 | `alacritty` (`kitty` optional) | Terminal |
 | `fastfetch`, `librespeed-cli` | Shown from the terminal / menu |
 | `grim` + `slurp` + `swappy` + `wl-clipboard` | Screenshots & annotations |
-| `jq`, `socat` | `hypr-new-tab` (open app as a tab) |
+| `jq`, `socat` | `hypr-new-tab`, overview thumbnails |
 | `hyprlock`, `hypridle` | Lock screen, idle timeouts |
 | `cliphist` | Clipboard history |
 | `swayosd` | Volume / brightness OSD |
@@ -264,5 +311,6 @@ Installed automatically by `install.sh`:
 | `playerctl`, `brightnessctl`, `pulseaudio-utils` | Media / hardware keys |
 | `pipewire` + `wireplumber` | Audio |
 | `network-manager-gnome`, `blueman` | Applets |
-| `python3-pil`, `python3-gi`, `gir1.2-gtklayershell-0.1` | Theme engine, thumbnails, wallpaper transition |
+| `python3-pil`, `python3-gi`, `gir1.2-gtklayershell-0.1`, `gir1.2-notify-0.7` | Theme engine, overview, thumbnails, wallpaper transition, notifications |
+| `btop`, `cava` (optional extras) | Themed system monitor and audio visualizer |
 | Nerd Fonts (CaskaydiaCove, JetBrainsMono) | Icons in waybar / wofi / swaync (downloaded on request) |
